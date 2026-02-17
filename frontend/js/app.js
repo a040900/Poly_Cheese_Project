@@ -166,6 +166,7 @@
         // BTC 價格
         const btcPrice = market.btc_price;
         setTextContent('val-btc-price', btcPrice ? `$${formatNumber(btcPrice, 2)}` : '--');
+        setTextContent('val-btc-change', btcPrice ? 'Binance 即時' : '等待數據...');
 
         // Polymarket 合約價格
         setTextContent('val-pm-up', market.pm_up_price ? `$${(market.pm_up_price).toFixed(4)}` : '--');
