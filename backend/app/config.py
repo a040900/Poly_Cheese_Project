@@ -14,7 +14,7 @@ load_dotenv(BASE_DIR / ".env")
 # ═══════════════════════════════════════════════════════════════
 # 系統設定
 # ═══════════════════════════════════════════════════════════════
-APP_NAME = "CheeseDog Polymarket Intelligent Trading Assistant"
+APP_NAME = "乳酪のBTC預測室 — Polymarket Intelligent Trading Assistant"
 VERSION = "2.0.0"
 BACKEND_HOST = os.getenv("BACKEND_HOST", "0.0.0.0")
 BACKEND_PORT = int(os.getenv("BACKEND_PORT", "8888"))

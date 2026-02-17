@@ -1,6 +1,6 @@
-# 🧀 CheeseDog 專案進度記錄
+# 🧀 乳酪のBTC預測室 專案進度記錄
 
-**最後更新**: 2026-02-18 00:57 (台灣時間)  
+**最後更新**: 2026-02-18 01:14 (台灣時間)  
 **專案版本**: 2.0.0 Stable  
 **當前階段**: Phase 2 完成 ✅ — 準備進入 Phase 3  
 
@@ -208,9 +208,48 @@ python -m uvicorn app.main:app --host 0.0.0.0 --port 8888
 
 ---
 
-## �💬 結語
+## 📝 Session Log: 2026-02-18 01:04 ~ 01:14
+
+### 🎯 本次 Session 目標
+透過瀏覽器檢查系統功能、品牌重命名、版本號修正。
+
+### ✅ 完成事項
+
+#### 1. 品牌重命名：CheeseDog → 乳酪のBTC預測室
+- **前端 HTML**: `<title>`、`<meta description>`、`<h1>` 品牌名稱全部更新
+- **前端 CSS/JS**: 檔頭註解同步更新
+- **後端 config.py**: `APP_NAME` 更新為「乳酪のBTC預測室」
+- **後端 __init__.py**: `__app_name__` + `__version__` 同步更新
+- **LLM Prompt**: prompt_builder.py 中 3 處可見名稱更新
+- **影響範圍**: `index.html`, `style.css`, `app.js`, `config.py`, `__init__.py`, `prompt_builder.py`
+
+#### 2. Footer 版本號修正
+- `v1.0.0` → `v2.0.0`，與系統實際版本保持一致
+
+#### 3. PM 簡稱全面替換為 Polymarket
+- 前端指標卡片：`PM 看漲合約` → `Polymarket 看漲`、`PM 看跌合約` → `Polymarket 看跌`
+- LLM Prompt：`PM UP/DOWN/流動性` → `Polymarket UP/DOWN/流動性`
+
+#### 4. API 功能驗證 (透過 HTTP 請求)
+| API 端點 | 狀態 | 備註 |
+|----------|------|------|
+| `/` (Dashboard) | ✅ | 頁面標題已更新為「乳酪のBTC預測室」 |
+| `/api/status` | ✅ | 3 個 Feed 皆 RUNNING |
+| `/api/signal` | ✅ | 即時信號正常 |
+| `/api/components` | ✅ | 元件健康度正常 |
+| `/api/performance` | ✅ | 績效報告正常 |
+| `/api/bus/stats` | ✅ | 32,000+ 事件已發佈 |
+| `/api/backtest` | ✅ | 4680 筆快照回測完成 |
+| `/api/backtest/compare` | ✅ | 三模式比較完成 |
+| `/api/llm/context` | ✅ | 系統名稱已更新 |
+| `/api/llm/prompt` | ✅ | Prompt 名稱已更新 |
+
+---
+
+## 💬 結語
 
 Phase 2 **「智能學習與架構優化」** 已圓滿完成！系統現在具備了強大的回測能力、穩定的事件驅動架構、以及初步的 LLM 整合能力。
 接下來的 **Phase 3** 將專注於實盤對接與更深度的 AI 策略優化。
 
-**CheeseDog v2.0.0 is ready for launch!** 🚀🧀
+**乳酪のBTC預測室 v2.0.0 is ready for launch!** 🚀🧀
+

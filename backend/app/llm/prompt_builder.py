@@ -91,10 +91,10 @@ class PromptBuilder:
         indicators = context.get("indicators", {})
 
         lines = [
-            "# 🧀 CheeseDog 交易系統分析請求",
+            "# 🧀 乳酪のBTC預測室 交易系統分析請求",
             "",
             "## 系統說明",
-            "CheeseDog 是 Polymarket BTC 15 分鐘二元選擇權的智能交易輔助系統。",
+            "乳酪のBTC預測室 是 Polymarket BTC 15 分鐘二元選擇權的智能交易輔助系統。",
             "系統使用 9 種技術指標綜合評分 (-100 ~ +100) 產生 BUY_UP / SELL_DOWN / NEUTRAL 信號。",
             "",
         ]
@@ -104,9 +104,9 @@ class PromptBuilder:
             "## 即時市場數據",
             f"- **BTC 中間價**: ${market.get('btc_mid', 0):,.2f}",
             f"- **Chainlink BTC/USD**: ${market.get('chainlink_price', 0):,.2f}" if market.get("chainlink_price") else "",
-            f"- **PM UP 合約**: {market.get('pm_up_price', 'N/A')}",
-            f"- **PM DOWN 合約**: {market.get('pm_down_price', 'N/A')}",
-            f"- **PM 流動性**: ${market.get('pm_liquidity', 0):,.0f}" if market.get("pm_liquidity") else "",
+            f"- **Polymarket UP 合約**: {market.get('pm_up_price', 'N/A')}",
+            f"- **Polymarket DOWN 合約**: {market.get('pm_down_price', 'N/A')}",
+            f"- **Polymarket 流動性**: ${market.get('pm_liquidity', 0):,.0f}" if market.get("pm_liquidity") else "",
             "",
         ])
 
@@ -232,7 +232,7 @@ class PromptBuilder:
             參數調優 prompt
         """
         lines = [
-            "# 🧀 CheeseDog 參數調優請求",
+            "# 🧀 乳酪のBTC預測室 參數調優請求",
             "",
             "## 當前參數配置",
             "",
