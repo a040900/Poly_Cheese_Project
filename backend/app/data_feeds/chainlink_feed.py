@@ -1,0 +1,178 @@
+"""
+🧀 CheeseDog - Chainlink 鏈上價格獲取模組
+透過 Polygon RPC 從 Chainlink 預言機獲取 BTC/USD 實時價格。
+"""
+
+import asyncio
+import logging
+import time
+from typing import Optional, Callable
+
+import aiohttp
+
+from app import config
+
+logger = logging.getLogger("cheesedog.feeds.chainlink")
+
+
+class ChainlinkState:
+    """Chainlink 數據狀態容器"""
+
+    def __init__(self):
+        self.btc_price: Optional[float] = None
+        self.round_id: Optional[int] = None
+        self.updated_at: Optional[float] = None
+        self.decimals: int = 8  # BTC/USD 預設精度
+
+        # 連線狀態
+        self.connected: bool = False
+        self.last_update: float = 0.0
+        self.error: Optional[str] = None
+
+
+class ChainlinkFeed:
+    """Chainlink 鏈上價格訂閱管理器"""
+
+    def __init__(self):
+        self.state = ChainlinkState()
+        self._running = False
+        self._tasks: list[asyncio.Task] = []
+        self._on_update: Optional[Callable] = None
+
+    def set_update_callback(self, callback: Callable):
+        """設定數據更新回調函數"""
+        self._on_update = callback
+
+    async def start(self):
+        """啟動 Chainlink 價格輪詢"""
+        if self._running:
+            return
+        self._running = True
+
+        logger.info("🟢 啟動 Chainlink BTC/USD 價格訂閱")
+
+        # 先獲取精度
+        await self._fetch_decimals()
+
+        # 啟動輪詢
+        self._tasks = [
+            asyncio.create_task(self._price_poller()),
+        ]
+
+    async def stop(self):
+        """停止價格輪詢"""
+        self._running = False
+        for task in self._tasks:
+            task.cancel()
+        self._tasks.clear()
+        self.state.connected = False
+        logger.info("🔴 Chainlink 價格訂閱已停止")
+
+    async def _eth_call(self, data: str) -> Optional[str]:
+        """執行以太坊 RPC 呼叫"""
+        payload = {
+            "jsonrpc": "2.0",
+            "method": "eth_call",
+            "params": [
+                {
+                    "to": config.CHAINLINK_BTC_USD_AGGREGATOR,
+                    "data": data,
+                },
+                "latest",
+            ],
+            "id": 1,
+        }
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    config.POLYGON_RPC_URL,
+                    json=payload,
+                    timeout=aiohttp.ClientTimeout(total=10),
+                ) as resp:
+                    result = await resp.json()
+                    if "error" in result:
+                        logger.error(f"RPC 錯誤: {result['error']}")
+                        return None
+                    return result.get("result")
+        except Exception as e:
+            logger.error(f"RPC 呼叫失敗: {e}")
+            return None
+
+    async def _fetch_decimals(self):
+        """獲取 Chainlink 價格精度"""
+        # decimals() 函數選擇器: 0x313ce567
+        result = await self._eth_call("0x313ce567")
+        if result:
+            try:
+                self.state.decimals = int(result, 16)
+                logger.info(f"📊 Chainlink BTC/USD 精度: {self.state.decimals}")
+            except (ValueError, TypeError):
+                logger.warning("無法解析精度，使用預設值 8")
+
+    async def _fetch_latest_price(self):
+        """獲取 Chainlink 最新價格"""
+        # latestRoundData() 函數選擇器: 0xfeaf968c
+        result = await self._eth_call("0xfeaf968c")
+        if not result or result == "0x":
+            return
+
+        try:
+            # 解析返回數據（5 個 uint256/int256 值）
+            # roundId, answer, startedAt, updatedAt, answeredInRound
+            hex_data = result[2:]  # 移除 0x
+            if len(hex_data) < 320:  # 5 * 64 hex chars
+                return
+
+            # answer 在第 2 個 slot（offset 64-128）
+            answer_hex = hex_data[64:128]
+            # updatedAt 在第 4 個 slot（offset 192-256）
+            updated_hex = hex_data[192:256]
+
+            # 處理有符號整數
+            answer = int(answer_hex, 16)
+            if answer > 2**255:
+                answer -= 2**256
+
+            updated_at = int(updated_hex, 16)
+
+            price = answer / (10 ** self.state.decimals)
+
+            self.state.btc_price = price
+            self.state.updated_at = updated_at
+            self.state.connected = True
+            self.state.last_update = time.time()
+            self.state.error = None
+
+            logger.debug(f"📈 Chainlink BTC/USD: ${price:,.2f}")
+
+            if self._on_update:
+                self._on_update("chainlink", "price_update")
+
+        except Exception as e:
+            logger.error(f"價格解析錯誤: {e}")
+            self.state.error = str(e)
+
+    async def _price_poller(self):
+        """定期輪詢 Chainlink 價格"""
+        while self._running:
+            try:
+                await self._fetch_latest_price()
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                self.state.error = str(e)
+                logger.debug(f"Chainlink 輪詢錯誤: {e}")
+
+            await asyncio.sleep(config.CHAINLINK_POLL_INTERVAL)
+
+    def get_snapshot(self) -> dict:
+        """取得當前 Chainlink 數據快照"""
+        return {
+            "connected": self.state.connected,
+            "last_update": self.state.last_update,
+            "error": self.state.error,
+            "btc_price": self.state.btc_price,
+            "updated_at": self.state.updated_at,
+            "decimals": self.state.decimals,
+        }

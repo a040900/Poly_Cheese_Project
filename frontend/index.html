@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="zh-TW" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="CheeseDog Polymarket 智慧交易輔助系統 - BTC 15分鐘漲跌智能分析 Dashboard">
+    <title>🧀 CheeseDog | Polymarket 智慧交易輔助系統</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- 頂部導航列 -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <nav class="navbar" id="navbar">
+        <div class="navbar-brand">
+            <span class="logo-icon">🧀</span>
+            <div class="brand-text">
+                <h1 class="brand-name">CheeseDog</h1>
+                <span class="brand-subtitle">Polymarket 智慧交易輔助系統</span>
+            </div>
+        </div>
+
+        <div class="navbar-status">
+            <div class="status-pill" id="status-binance" title="Binance 連線狀態">
+                <span class="status-dot"></span>
+                <span class="status-label">Binance</span>
+            </div>
+            <div class="status-pill" id="status-polymarket" title="Polymarket 連線狀態">
+                <span class="status-dot"></span>
+                <span class="status-label">Polymarket</span>
+            </div>
+            <div class="status-pill" id="status-chainlink" title="Chainlink 連線狀態">
+                <span class="status-dot"></span>
+                <span class="status-label">Chainlink</span>
+            </div>
+        </div>
+
+        <div class="navbar-actions">
+            <button class="btn btn-icon" id="btn-theme-toggle" title="切換主題">
+                <span class="theme-icon">🌙</span>
+            </button>
+            <button class="btn btn-danger btn-sm" id="btn-emergency-stop" title="緊急停止">
+                ⛔ 緊急停止
+            </button>
+        </div>
+    </nav>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- 主要內容區 -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <main class="dashboard" id="dashboard">
+
+        <!-- ── 頂部指標卡片列 ─────────────────────────────── -->
+        <section class="metrics-row" id="metrics-row">
+            <div class="metric-card metric-btc" id="card-btc-price">
+                <div class="metric-label">BTC 即時價格</div>
+                <div class="metric-value" id="val-btc-price">--</div>
+                <div class="metric-sub" id="val-btc-change">連線中...</div>
+            </div>
+            <div class="metric-card metric-pm-up" id="card-pm-up">
+                <div class="metric-label">PM 看漲合約 ↑</div>
+                <div class="metric-value" id="val-pm-up">--</div>
+                <div class="metric-sub" id="val-pm-market">--</div>
+            </div>
+            <div class="metric-card metric-pm-down" id="card-pm-down">
+                <div class="metric-label">PM 看跌合約 ↓</div>
+                <div class="metric-value" id="val-pm-down">--</div>
+                <div class="metric-sub" id="val-pm-liquidity">--</div>
+            </div>
+            <div class="metric-card metric-signal" id="card-signal">
+                <div class="metric-label">當前信號</div>
+                <div class="metric-value signal-neutral" id="val-signal">NEUTRAL</div>
+                <div class="metric-sub" id="val-signal-score">分數: --</div>
+            </div>
+        </section>
+
+        <!-- ── 主面板區 ───────────────────────────────────── -->
+        <div class="panels-grid">
+
+            <!-- 左側面板：趨勢分數 & 指標 -->
+            <section class="panel panel-bias" id="panel-bias">
+                <div class="panel-header">
+                    <h2 class="panel-title">📊 趨勢偏差分數</h2>
+                    <span class="badge" id="badge-mode">平衡模式</span>
+                </div>
+                <div class="panel-body">
+                    <!-- 趨勢分數儀表盤 -->
+                    <div class="gauge-container" id="gauge-container">
+                        <svg class="gauge-svg" viewBox="0 0 200 120">
+                            <defs>
+                                <linearGradient id="grad-bearish" x1="0%" y1="0%" x2="100%" y2="0%">
+                                    <stop offset="0%" style="stop-color:#ef4444"/>
+                                    <stop offset="100%" style="stop-color:#f97316"/>
+                                </linearGradient>
+                                <linearGradient id="grad-bullish" x1="0%" y1="0%" x2="100%" y2="0%">
+                                    <stop offset="0%" style="stop-color:#f97316"/>
+                                    <stop offset="100%" style="stop-color:#22c55e"/>
+                                </linearGradient>
+                            </defs>
+                            <!-- 背景弧 -->
+                            <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="var(--gauge-bg)" stroke-width="12" stroke-linecap="round"/>
+                            <!-- 偏差弧 -->
+                            <path id="gauge-arc" d="M 20 100 A 80 80 0 0 1 100 20" fill="none" stroke="url(#grad-bullish)" stroke-width="12" stroke-linecap="round"/>
+                            <!-- 指針 -->
+                            <line id="gauge-needle" x1="100" y1="100" x2="100" y2="30" stroke="var(--text-primary)" stroke-width="2.5" stroke-linecap="round"/>
+                            <circle cx="100" cy="100" r="5" fill="var(--accent-primary)"/>
+                            <!-- 分數文字 -->
+                            <text id="gauge-text" x="100" y="90" text-anchor="middle" class="gauge-label">0</text>
+                        </svg>
+                        <div class="gauge-labels">
+                            <span class="gauge-min">-100 看跌</span>
+                            <span class="gauge-max">看漲 +100</span>
+                        </div>
+                    </div>
+
+                    <!-- 指標列表 -->
+                    <div class="indicators-list" id="indicators-list">
+                        <div class="indicator-row" data-indicator="ema">
+                            <span class="ind-name">EMA 交叉</span>
+                            <span class="ind-value" id="ind-ema">--</span>
+                            <span class="ind-signal">--</span>
+                        </div>
+                        <div class="indicator-row" data-indicator="obi">
+                            <span class="ind-name">訂單簿失衡</span>
+                            <span class="ind-value" id="ind-obi">--</span>
+                            <span class="ind-signal">--</span>
+                        </div>
+                        <div class="indicator-row" data-indicator="macd">
+                            <span class="ind-name">MACD</span>
+                            <span class="ind-value" id="ind-macd">--</span>
+                            <span class="ind-signal">--</span>
+                        </div>
+                        <div class="indicator-row" data-indicator="cvd">
+                            <span class="ind-name">CVD (5m)</span>
+                            <span class="ind-value" id="ind-cvd">--</span>
+                            <span class="ind-signal">--</span>
+                        </div>
+                        <div class="indicator-row" data-indicator="rsi">
+                            <span class="ind-name">RSI (14)</span>
+                            <span class="ind-value" id="ind-rsi">--</span>
+                            <span class="ind-signal">--</span>
+                        </div>
+                        <div class="indicator-row" data-indicator="vwap">
+                            <span class="ind-name">VWAP</span>
+                            <span class="ind-value" id="ind-vwap">--</span>
+                            <span class="ind-signal">--</span>
+                        </div>
+                        <div class="indicator-row" data-indicator="heikin_ashi">
+                            <span class="ind-name">Heikin Ashi</span>
+                            <span class="ind-value" id="ind-ha">--</span>
+                            <span class="ind-signal">--</span>
+                        </div>
+                        <div class="indicator-row" data-indicator="poc">
+                            <span class="ind-name">POC</span>
+                            <span class="ind-value" id="ind-poc">--</span>
+                            <span class="ind-signal">--</span>
+                        </div>
+                        <div class="indicator-row" data-indicator="walls">
+                            <span class="ind-name">買賣牆</span>
+                            <span class="ind-value" id="ind-walls">--</span>
+                            <span class="ind-signal">--</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 右側面板：交易控制 & PnL -->
+            <section class="panel panel-trading" id="panel-trading">
+                <div class="panel-header">
+                    <h2 class="panel-title">💰 模擬交易</h2>
+                    <div class="panel-actions">
+                        <button class="btn btn-sm btn-outline" id="btn-sim-toggle">
+                            ▶ 啟動
+                        </button>
+                        <button class="btn btn-sm btn-outline" id="btn-sim-reset" title="重置模擬帳戶">
+                            🔄
+                        </button>
+                    </div>
+                </div>
+                <div class="panel-body">
+                    <!-- 模擬帳戶摘要 -->
+                    <div class="sim-summary">
+                        <div class="sim-stat">
+                            <span class="sim-stat-label">帳戶餘額</span>
+                            <span class="sim-stat-value" id="sim-balance">$1,000.00</span>
+                        </div>
+                        <div class="sim-stat">
+                            <span class="sim-stat-label">總盈虧</span>
+                            <span class="sim-stat-value" id="sim-pnl">$0.00</span>
+                        </div>
+                        <div class="sim-stat">
+                            <span class="sim-stat-label">勝率</span>
+                            <span class="sim-stat-value" id="sim-winrate">0%</span>
+                        </div>
+                        <div class="sim-stat">
+                            <span class="sim-stat-label">交易次數</span>
+                            <span class="sim-stat-value" id="sim-trades">0</span>
+                        </div>
+                    </div>
+
+                    <!-- PnL 曲線 -->
+                    <div class="pnl-chart-container">
+                        <h3 class="chart-title">PnL 曲線</h3>
+                        <canvas id="pnl-canvas" width="500" height="200"></canvas>
+                    </div>
+
+                    <!-- 最近交易記錄 -->
+                    <div class="trades-list" id="trades-list">
+                        <h3 class="chart-title">最近交易</h3>
+                        <div class="trades-table" id="trades-table">
+                            <div class="trade-header">
+                                <span>方向</span>
+                                <span>金額</span>
+                                <span>盈虧</span>
+                                <span>狀態</span>
+                            </div>
+                            <div class="trades-body" id="trades-body">
+                                <div class="trade-empty">暫無交易記錄</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </div>
+
+        <!-- ── 底部控制列 ─────────────────────────────────── -->
+        <section class="control-bar" id="control-bar">
+            <!-- 交易模式選擇器 -->
+            <div class="control-group">
+                <label class="control-label">交易模式</label>
+                <div class="mode-selector" id="mode-selector">
+                    <button class="mode-btn" data-mode="aggressive" id="mode-aggressive">
+                        🔥 積極
+                    </button>
+                    <button class="mode-btn active" data-mode="balanced" id="mode-balanced">
+                        ⚖️ 平衡
+                    </button>
+                    <button class="mode-btn" data-mode="conservative" id="mode-conservative">
+                        🛡️ 保守
+                    </button>
+                </div>
+            </div>
+
+            <!-- LLM 建議區 -->
+            <div class="control-group llm-advice" id="llm-advice">
+                <label class="control-label">🧠 AI 建議</label>
+                <div class="advice-content" id="advice-content">
+                    <span class="advice-text">系統就緒，等待 AI 代理提供分析建議...</span>
+                </div>
+            </div>
+
+            <!-- 安全操作區 -->
+            <div class="control-group">
+                <label class="control-label">⚠️ 進階操作</label>
+                <button class="btn btn-warning btn-sm" id="btn-live-trading" disabled>
+                    🔒 切換實盤交易
+                </button>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- 安全密碼驗證彈窗 -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="modal-overlay" id="modal-password" style="display: none;">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>🔐 安全驗證</h3>
+                <button class="btn btn-icon modal-close" id="modal-close">✕</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-instruction">
+                    此操作需要安全驗證。<br>
+                    請口頭向 AI 說出<strong>「給我密碼」</strong>來獲取驗證密碼。
+                </p>
+                <div class="password-input-group">
+                    <input type="text" id="input-password" class="input-password"
+                           placeholder="輸入 6 位驗證密碼" maxlength="6"
+                           autocomplete="off">
+                    <button class="btn btn-primary" id="btn-verify-password">驗證</button>
+                </div>
+                <div class="password-timer" id="password-timer" style="display: none;">
+                    剩餘時間: <span id="password-countdown">300</span> 秒
+                </div>
+                <div class="password-result" id="password-result"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- 底部狀態欄 -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <footer class="footer" id="footer">
+        <div class="footer-left">
+            <span id="footer-ws-status" class="ws-status">⚡ WebSocket 連線中...</span>
+        </div>
+        <div class="footer-center">
+            <span id="footer-time">--</span>
+        </div>
+        <div class="footer-right">
+            <span>v1.0.0</span>
+        </div>
+    </footer>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
