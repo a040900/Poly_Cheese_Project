@@ -1,8 +1,8 @@
 # 🧀 CheeseDog 專案進度記錄
 
-**最後更新**: 2026-02-17 23:50 (台灣時間)  
-**專案版本**: 2.0.0  
-**當前階段**: Phase 2 - 智能學習與架構優化  
+**最後更新**: 2026-02-18 00:57 (台灣時間)  
+**專案版本**: 2.0.0 Stable  
+**當前階段**: Phase 2 完成 ✅ — 準備進入 Phase 3  
 
 ---
 
@@ -148,10 +148,69 @@ python -m uvicorn app.main:app --host 0.0.0.0 --port 8888
 
 ---
 
-## 💬 結語
+## 📝 Session Log: 2026-02-18 00:00 ~ 00:57
+
+### 🎯 本次 Session 目標
+驗證回測引擎與 LLM 功能、修復 VPS 部署崩潰問題、生成合成測試數據。
+
+### ✅ 完成事項
+
+#### 1. 核心 Bug 修復：`Component.state` Property Setter 衝突
+- **問題**：`Component` 基類的 `state` 是 `@property`（回傳 `ComponentState` 枚舉），但子類 `BinanceFeed/PolymarketFeed/ChainlinkFeed` 在 `__init__` 中用 `self.state = XxxState()` 覆蓋，因沒有 setter 導致 `AttributeError`
+- **修復**：
+  - `core/state.py`：增加 `state` setter，區分 `_component_state`（枚舉）和 `_data_state`（數據容器）
+  - 所有 Feed 中的 `self._state` → `self._component_state`
+- **影響範圍**：`state.py`, `binance_feed.py`, `polymarket_feed.py`, `chainlink_feed.py`
+
+#### 2. 核心 Bug 修復：`LOG_LEVEL` 大小寫敏感導致啟動崩潰 �
+- **問題**：VPS 環境變數 `LOG_LEVEL=info`（小寫）→ `getattr(logging, "info")` 回傳 `logging.info` **函數**而非整數 → `TypeError` → pm2 errored → 502
+- **修復**：
+  - `config.py`：`LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()` — 源頭強制大寫
+  - `main.py`：額外加入 `isinstance(_log_level, int)` 安全檢查
+- **這是 VPS 502 ERROR 的直接原因**
+
+#### 3. 合成市場數據生成器
+- 新增 `backend/tests/generate_synthetic_data.py`
+- 成功生成 **2880 筆** (48 小時) 模擬市場快照
+- 包含：BTC 價格（多週期正弦波+雜訊）、PM UP/DOWN 價格、Chainlink 價格、指標 JSON
+
+#### 4. Chainlink RPC 穩定性增強
+- 新增 3 個備用 Polygon RPC 節點自動輪換
+- 連續失敗 3 次自動切換到下一個 RPC
+- `polygon-rpc.com` → `polygon-bor-rpc.publicnode.com` → `rpc.ankr.com/polygon`
+
+#### 5. 錯誤日誌改善
+- 所有 Feed 的 `except` 區塊改用 `repr(e)` 替代 `str(e)`
+- 確保異常類型和完整訊息都能在 pm2 日誌中顯示
+
+#### 6. main.py 重複路由清理
+- 移除重複定義的 `/api/components` 和 `/api/bus/stats` 路由
+
+#### 7. API 全面驗證通過
+| API 端點 | 狀態 | 備註 |
+|----------|------|------|
+| `/api/performance` | ✅ | 即時績效報告正常 |
+| `/api/components` | ✅ | 3 個元件皆 RUNNING |
+| `/api/bus/stats` | ✅ | 已發佈 23127+ 事件 |
+| `/api/backtest` | ✅ | 83 筆交易，勝率 55.42% |
+| `/api/llm/context` | ✅ | 結構化上下文完整 |
+| `/api/llm/prompt` | ✅ | 分析 Prompt 正常生成 |
+
+### 🔍 VPS PM2 日誌分析結論
+- **Chainlink RPC 失敗**：公共 RPC 對 VPS IP 限流 → 已加備用節點輪換
+- **Polymarket 間歇斷線**：WebSocket 超時，屬正常網路波動 → 已延長重連間隔
+- **系統關閉序列**：pm2 restart 觸發的正常 graceful shutdown
+- **502 ERROR 根因**：`LOG_LEVEL` 小寫導致啟動崩潰 → 已修復
+
+### 📦 Git 提交記錄
+1. `1a20223` — `feat(phase2): v2.0.0 Stable - Complete Phase 2, fix ComponentState setter bug, add synthetic data gen, optimize feeds`
+2. `d8a1f5c` — `fix(critical): LOG_LEVEL case sensitivity - force uppercase to prevent startup crash on VPS`
+
+---
+
+## �💬 結語
 
 Phase 2 **「智能學習與架構優化」** 已圓滿完成！系統現在具備了強大的回測能力、穩定的事件驅動架構、以及初步的 LLM 整合能力。
 接下來的 **Phase 3** 將專注於實盤對接與更深度的 AI 策略優化。
 
 **CheeseDog v2.0.0 is ready for launch!** 🚀🧀
-
