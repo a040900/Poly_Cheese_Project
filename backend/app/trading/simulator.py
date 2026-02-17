@@ -267,6 +267,39 @@ class SimulationEngine:
             "is_running": self._running,
         }
 
+    def get_recent_trades(self, limit: int = 10) -> List[dict]:
+        """取得最近的交易記錄（含未平倉）"""
+        trades = []
+
+        # 未平倉交易
+        for t in self.open_trades:
+            elapsed = time.time() - t.entry_time
+            trades.append({
+                "trade_id": t.trade_id,
+                "direction": t.direction,
+                "quantity": round(t.quantity, 2),
+                "pnl": 0,
+                "status": "open",
+                "entry_time": t.entry_time,
+                "elapsed_min": round(elapsed / 60, 1),
+                "trading_mode": t.trading_mode,
+            })
+
+        # 最近已結算交易（倒序，最新的在前）
+        for t in reversed(self.trade_history[-limit:]):
+            trades.append({
+                "trade_id": t["trade_id"],
+                "direction": t["direction"],
+                "quantity": round(t["quantity"], 2),
+                "pnl": round(t.get("pnl", 0), 2),
+                "status": "closed",
+                "won": t.get("won", False),
+                "entry_time": t.get("entry_time", 0),
+                "exit_time": t.get("exit_time", 0),
+            })
+
+        return trades
+
     def get_pnl_curve(self) -> List[dict]:
         """取得 PnL 曲線數據"""
         curve = []

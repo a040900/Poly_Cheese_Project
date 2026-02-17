@@ -218,6 +218,7 @@ def build_dashboard_data() -> dict:
                 signal_generator.current_mode, {}
             ).get("name", ""),
             "simulation": sim_engine.get_stats(),
+            "recent_trades": sim_engine.get_recent_trades(),
             "pnl_curve": sim_engine.get_pnl_curve(),
         },
         "security": password_manager.get_status(),

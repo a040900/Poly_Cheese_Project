@@ -304,11 +304,52 @@
             if (badge) badge.textContent = trading.mode_name || trading.mode;
         }
 
+        // 渲染最近交易記錄
+        renderRecentTrades(trading.recent_trades);
+
         // 更新 PnL 曲線
         if (trading.pnl_curve) {
             pnlHistory = trading.pnl_curve;
             drawPnlChart();
         }
+    }
+
+    function renderRecentTrades(trades) {
+        const tbody = document.getElementById('trades-body');
+        if (!tbody) return;
+
+        if (!trades || trades.length === 0) {
+            tbody.innerHTML = '<div class="trade-empty">暫無交易記錄</div>';
+            return;
+        }
+
+        const rows = trades.map(t => {
+            const dirLabel = t.direction === 'BUY_UP' ? '📈 看漲' : '📉 看跌';
+            const dirClass = t.direction === 'BUY_UP' ? 'bullish' : 'bearish';
+
+            let statusLabel, statusClass, pnlText;
+
+            if (t.status === 'open') {
+                statusLabel = `⏳ ${t.elapsed_min || 0}m`;
+                statusClass = 'open';
+                pnlText = '持倉中';
+            } else {
+                const won = t.won;
+                statusLabel = won ? '✅ 勝' : '❌ 負';
+                statusClass = won ? 'won' : 'lost';
+                const pnl = t.pnl || 0;
+                pnlText = `${pnl >= 0 ? '+' : ''}$${formatNumber(pnl, 2)}`;
+            }
+
+            return `<div class="trade-row ${statusClass}">
+                <span class="trade-dir ${dirClass}">${dirLabel}</span>
+                <span class="trade-qty">$${formatNumber(t.quantity, 2)}</span>
+                <span class="trade-pnl ${t.pnl >= 0 ? 'positive' : 'negative'}">${pnlText}</span>
+                <span class="trade-status ${statusClass}">${statusLabel}</span>
+            </div>`;
+        });
+
+        tbody.innerHTML = rows.join('');
     }
 
     // ═══════════════════════════════════════════════════════════

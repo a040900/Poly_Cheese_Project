@@ -20,7 +20,8 @@
     --text-muted: #64748b;
 
     /* 品牌色 */
-    --accent-primary: #f59e0b;     /* 乳酪金 */
+    --accent-primary: #f59e0b;
+    /* 乳酪金 */
     --accent-secondary: #d97706;
     --accent-glow: rgba(245, 158, 11, 0.15);
 
@@ -101,7 +102,9 @@
 /* ═══════════════════════════════════════════════════════════════
    基礎重置 & 全域樣式
    ═══════════════════════════════════════════════════════════════ */
-*, *::before, *::after {
+*,
+*::before,
+*::after {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
@@ -169,8 +172,15 @@ body::before {
 }
 
 @keyframes cheese-float {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-3px); }
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-3px);
+    }
 }
 
 .brand-name {
@@ -234,8 +244,15 @@ body::before {
 }
 
 @keyframes pulse-dot {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
 }
 
 /* 導航列按鈕 */
@@ -378,10 +395,21 @@ body::before {
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
 
-.metric-btc::before { background: linear-gradient(90deg, #f7931a, #ff9500); }
-.metric-pm-up::before { background: linear-gradient(90deg, #22c55e, #4ade80); }
-.metric-pm-down::before { background: linear-gradient(90deg, #ef4444, #f87171); }
-.metric-signal::before { background: linear-gradient(90deg, var(--accent-primary), #fbbf24); }
+.metric-btc::before {
+    background: linear-gradient(90deg, #f7931a, #ff9500);
+}
+
+.metric-pm-up::before {
+    background: linear-gradient(90deg, #22c55e, #4ade80);
+}
+
+.metric-pm-down::before {
+    background: linear-gradient(90deg, #ef4444, #f87171);
+}
+
+.metric-signal::before {
+    background: linear-gradient(90deg, var(--accent-primary), #fbbf24);
+}
 
 .metric-card:hover {
     border-color: var(--border-color-hover);
@@ -412,9 +440,17 @@ body::before {
 }
 
 /* 信號方向顏色 */
-.signal-bullish { color: var(--color-bullish) !important; }
-.signal-bearish { color: var(--color-bearish) !important; }
-.signal-neutral { color: var(--text-muted) !important; }
+.signal-bullish {
+    color: var(--color-bullish) !important;
+}
+
+.signal-bearish {
+    color: var(--color-bearish) !important;
+}
+
+.signal-neutral {
+    color: var(--text-muted) !important;
+}
 
 /* ── 面板網格 ─────────────────────────────────────────────── */
 .panels-grid {
@@ -494,8 +530,13 @@ body::before {
     color: var(--text-muted);
 }
 
-.gauge-min { color: var(--color-bearish); }
-.gauge-max { color: var(--color-bullish); }
+.gauge-min {
+    color: var(--color-bearish);
+}
+
+.gauge-max {
+    color: var(--color-bullish);
+}
 
 /* ── 指標列表 ─────────────────────────────────────────────── */
 .indicators-list {
@@ -587,8 +628,13 @@ body::before {
     font-weight: 700;
 }
 
-.sim-stat-value.positive { color: var(--color-bullish); }
-.sim-stat-value.negative { color: var(--color-bearish); }
+.sim-stat-value.positive {
+    color: var(--color-bullish);
+}
+
+.sim-stat-value.negative {
+    color: var(--color-bearish);
+}
 
 /* PnL 圖表 */
 .pnl-chart-container {
@@ -654,28 +700,55 @@ body::before {
     font-size: 0.82rem;
 }
 
-.trade-dir-up { color: var(--color-bullish); font-weight: 600; }
-.trade-dir-down { color: var(--color-bearish); font-weight: 600; }
+.trade-dir-up,
+.trade-dir.bullish {
+    color: var(--color-bullish);
+    font-weight: 600;
+}
 
-.trade-pnl-positive { color: var(--color-bullish); font-weight: 600; }
-.trade-pnl-negative { color: var(--color-bearish); font-weight: 600; }
+.trade-dir-down,
+.trade-dir.bearish {
+    color: var(--color-bearish);
+    font-weight: 600;
+}
 
-.trade-status-open {
-    display: inline-block;
-    padding: 0.1rem 0.4rem;
-    border-radius: 4px;
-    font-size: 0.68rem;
-    background: rgba(59, 130, 246, 0.15);
+.trade-pnl-positive,
+.trade-pnl.positive {
+    color: var(--color-bullish);
+    font-weight: 600;
+}
+
+.trade-pnl-negative,
+.trade-pnl.negative {
+    color: var(--color-bearish);
+    font-weight: 600;
+}
+
+.trade-qty {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 500;
+}
+
+.trade-status {
+    font-size: 0.72rem;
+    font-weight: 600;
+}
+
+.trade-row.open {
+    background: rgba(59, 130, 246, 0.05);
+    border-left: 2px solid var(--color-info);
+}
+
+.trade-status.open {
     color: var(--color-info);
 }
 
-.trade-status-closed {
-    display: inline-block;
-    padding: 0.1rem 0.4rem;
-    border-radius: 4px;
-    font-size: 0.68rem;
-    background: rgba(148, 163, 184, 0.15);
-    color: var(--text-muted);
+.trade-status.won {
+    color: var(--color-bullish);
+}
+
+.trade-status.lost {
+    color: var(--color-bearish);
 }
 
 /* ── 底部控制列 ───────────────────────────────────────────── */
@@ -781,8 +854,13 @@ body::before {
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
 }
 
 .modal {
@@ -796,8 +874,15 @@ body::before {
 }
 
 @keyframes slideUp {
-    from { transform: translateY(20px); opacity: 0; }
-    to { transform: translateY(0); opacity: 1; }
+    from {
+        transform: translateY(20px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
 }
 
 .modal-header {
@@ -878,8 +963,13 @@ body::before {
     min-height: 1.5rem;
 }
 
-.password-result.success { color: var(--color-success); }
-.password-result.error { color: var(--color-danger); }
+.password-result.success {
+    color: var(--color-success);
+}
+
+.password-result.error {
+    color: var(--color-danger);
+}
 
 /* ═══════════════════════════════════════════════════════════════
    底部狀態欄
@@ -904,32 +994,47 @@ body::before {
     gap: 0.3rem;
 }
 
-.ws-status.connected { color: var(--color-success); }
-.ws-status.disconnected { color: var(--color-danger); }
+.ws-status.connected {
+    color: var(--color-success);
+}
+
+.ws-status.disconnected {
+    color: var(--color-danger);
+}
 
 /* ═══════════════════════════════════════════════════════════════
    動畫
    ═══════════════════════════════════════════════════════════════ */
 @keyframes shimmer {
-    0% { background-position: -200% 0; }
-    100% { background-position: 200% 0; }
+    0% {
+        background-position: -200% 0;
+    }
+
+    100% {
+        background-position: 200% 0;
+    }
 }
 
 .loading {
-    background: linear-gradient(
-        90deg,
-        var(--bg-elevated) 25%,
-        var(--bg-card-hover) 50%,
-        var(--bg-elevated) 75%
-    );
+    background: linear-gradient(90deg,
+            var(--bg-elevated) 25%,
+            var(--bg-card-hover) 50%,
+            var(--bg-elevated) 75%);
     background-size: 200% 100%;
     animation: shimmer 1.5s ease-in-out infinite;
 }
 
 /* 信號閃爍動畫 */
 @keyframes signal-pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.6; }
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.6;
+    }
 }
 
 .signal-active {
