@@ -136,7 +136,7 @@ class BinanceFeed(Component):
                         self.state.connected = True
                         self.state.error = None
                         # 從 DEGRADED 恢復或正常確認
-                        if self._state in (ComponentState.DEGRADED, ComponentState.FAULTED):
+                        if self._component_state in (ComponentState.DEGRADED, ComponentState.FAULTED):
                             self.set_running()
                         logger.info(f"🔗 Binance WebSocket 已連線 [{self.symbol}]")
 
@@ -153,9 +153,9 @@ class BinanceFeed(Component):
                 break
             except Exception as e:
                 self.state.connected = False
-                self.state.error = str(e)
-                self.set_degraded(f"WebSocket 斷線: {e}")
-                logger.warning(f"⚠️ Binance WebSocket 斷線: {e}，5秒後重連...")
+                self.state.error = str(e) or repr(e)
+                self.set_degraded(f"WebSocket 斷線: {repr(e)}")
+                logger.warning(f"⚠️ Binance WebSocket 斷線: {repr(e)}，5秒後重連...")
                 await asyncio.sleep(5)
 
     def _process_ws_message(self, data: dict):
@@ -282,5 +282,5 @@ class BinanceFeed(Component):
             "kline_count": len(all_klines),
             "current_kline": self.state.cur_kline,
             # Phase 2: 加入元件狀態
-            "component_state": self._state.value,
+            "component_state": self._component_state.value,
         }

@@ -182,8 +182,8 @@ class PolymarketFeed(Component):
                     self.state.error = "未找到活躍市場"
 
         except Exception as e:
-            logger.error(f"❌ 獲取 Polymarket 市場資訊失敗: {e}")
-            self.state.error = str(e)
+            logger.error(f"❌ 獲取 Polymarket 市場資訊失敗: {repr(e)}")
+            self.state.error = str(e) or repr(e)
 
     async def _ws_feed(self):
         """WebSocket 數據流（合約價格實時更新）"""
@@ -211,7 +211,7 @@ class PolymarketFeed(Component):
                         })
                         self.state.connected = True
                         self.state.error = None
-                        if self._state in (ComponentState.DEGRADED, ComponentState.FAULTED):
+                        if self._component_state in (ComponentState.DEGRADED, ComponentState.FAULTED):
                             self.set_running()
                         logger.info("🔗 Polymarket WebSocket 已連線")
 
@@ -228,10 +228,10 @@ class PolymarketFeed(Component):
                 break
             except Exception as e:
                 self.state.connected = False
-                self.state.error = str(e)
-                self.set_degraded(f"WebSocket 斷線: {e}")
-                logger.warning(f"⚠️ Polymarket WebSocket 斷線: {e}，5秒後重連...")
-                await asyncio.sleep(5)
+                self.state.error = str(e) or repr(e)
+                self.set_degraded(f"WebSocket 斷線: {repr(e)}")
+                logger.warning(f"⚠️ Polymarket WebSocket 斷線: {repr(e)}，10秒後重連...")
+                await asyncio.sleep(10)
 
     def _process_ws_message(self, data):
         """處理 WebSocket 訊息"""
@@ -303,5 +303,5 @@ class PolymarketFeed(Component):
             "volume": self.state.volume,
             "has_tokens": self.state.up_token_id is not None,
             # Phase 2: 加入元件狀態
-            "component_state": self._state.value,
+            "component_state": self._component_state.value,
         }

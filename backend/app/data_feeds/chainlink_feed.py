@@ -36,6 +36,14 @@ class ChainlinkState:
         self.error: Optional[str] = None
 
 
+# 備用 Polygon RPC URL 列表（公共免費節點）
+_POLYGON_RPC_FALLBACKS = [
+    config.POLYGON_RPC_URL,
+    "https://polygon-bor-rpc.publicnode.com",
+    "https://rpc.ankr.com/polygon",
+]
+
+
 class ChainlinkFeed(Component):
     """Chainlink 鏈上價格訂閱管理器"""
 
@@ -45,6 +53,8 @@ class ChainlinkFeed(Component):
         self._running = False
         self._tasks: list[asyncio.Task] = []
         self._on_update: Optional[Callable] = None
+        self._rpc_index = 0  # 當前使用的 RPC URL 索引
+        self._consecutive_failures = 0
 
     def set_update_callback(self, callback: Callable):
         """設定數據更新回調函數（向後相容）"""
@@ -78,8 +88,20 @@ class ChainlinkFeed(Component):
         self.set_stopped()
         logger.info("🔴 Chainlink 價格訂閱已停止")
 
+    def _current_rpc_url(self) -> str:
+        """取得當前使用的 RPC URL"""
+        return _POLYGON_RPC_FALLBACKS[self._rpc_index % len(_POLYGON_RPC_FALLBACKS)]
+
+    def _rotate_rpc(self):
+        """輪換到下一個 RPC URL"""
+        old_url = self._current_rpc_url()
+        self._rpc_index = (self._rpc_index + 1) % len(_POLYGON_RPC_FALLBACKS)
+        new_url = self._current_rpc_url()
+        if old_url != new_url:
+            logger.info(f"🔄 Chainlink RPC 輪換: {old_url} → {new_url}")
+
     async def _eth_call(self, data: str) -> Optional[str]:
-        """執行以太坊 RPC 呼叫"""
+        """執行以太坊 RPC 呼叫（含備用 RPC 輪換）"""
         payload = {
             "jsonrpc": "2.0",
             "method": "eth_call",
@@ -93,20 +115,30 @@ class ChainlinkFeed(Component):
             "id": 1,
         }
 
+        rpc_url = self._current_rpc_url()
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(
-                    config.POLYGON_RPC_URL,
+                    rpc_url,
                     json=payload,
-                    timeout=aiohttp.ClientTimeout(total=10),
+                    timeout=aiohttp.ClientTimeout(total=15),
                 ) as resp:
                     result = await resp.json()
                     if "error" in result:
-                        logger.error(f"RPC 錯誤: {result['error']}")
+                        logger.error(f"RPC 錯誤 ({rpc_url}): {result['error']}")
+                        self._consecutive_failures += 1
+                        if self._consecutive_failures >= 3:
+                            self._rotate_rpc()
+                            self._consecutive_failures = 0
                         return None
+                    self._consecutive_failures = 0
                     return result.get("result")
         except Exception as e:
-            logger.error(f"RPC 呼叫失敗: {e}")
+            self._consecutive_failures += 1
+            logger.warning(f"⚠️ RPC 呼叫失敗 ({rpc_url}): {repr(e)}")
+            if self._consecutive_failures >= 3:
+                self._rotate_rpc()
+                self._consecutive_failures = 0
             return None
 
     async def _fetch_decimals(self):
@@ -194,5 +226,5 @@ class ChainlinkFeed(Component):
             "updated_at": self.state.updated_at,
             "decimals": self.state.decimals,
             # Phase 2: 加入元件狀態
-            "component_state": self._state.value,
+            "component_state": self._component_state.value,
         }

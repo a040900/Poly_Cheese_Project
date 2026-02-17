@@ -549,26 +549,6 @@ async def get_security_status():
     return password_manager.get_status()
 
 
-# Phase 2: MessageBus 統計端點
-@app.get("/api/bus/stats")
-async def get_bus_stats():
-    """取得 MessageBus 事件匯流排統計"""
-    return bus.get_stats()
-
-
-# Phase 2: 元件健康度端點
-@app.get("/api/components")
-async def get_component_health():
-    """取得所有元件健康度"""
-    return {
-        "components": [
-            binance_feed.state_info,
-            polymarket_feed.state_info,
-            chainlink_feed.state_info,
-        ],
-    }
-
-
 # Phase 2 步驟 12: 績效追蹤 + 回測 API
 @app.get("/api/performance")
 async def get_performance():

@@ -52,7 +52,8 @@ class Component:
 
     def __init__(self, name: str):
         self._name = name
-        self._state = ComponentState.INITIALIZING
+        self._component_state = ComponentState.INITIALIZING
+        self._data_state = None  # 子類用 self.state = XxxState() 時存放數據容器
         self._state_changed_at = time.time()
         self._error_message: Optional[str] = None
         self._logger = logging.getLogger(f"cheesedog.{name}")
@@ -62,30 +63,44 @@ class Component:
         return self._name
 
     @property
-    def state(self) -> ComponentState:
-        return self._state
+    def state(self):
+        """
+        優先回傳子類的數據狀態容器（BinanceState/PolymarketState 等）。
+        若無數據容器，則回傳元件狀態枚舉。
+        """
+        if self._data_state is not None:
+            return self._data_state
+        return self._component_state
+
+    @state.setter
+    def state(self, value):
+        """允許子類用 self.state = XxxState() 設定數據容器"""
+        if isinstance(value, ComponentState):
+            self._component_state = value
+        else:
+            self._data_state = value
 
     @property
     def state_info(self) -> dict:
         """取得元件狀態摘要（供 Dashboard 顯示）"""
         return {
             "name": self._name,
-            "state": self._state.value,
+            "state": self._component_state.value,
             "since": self._state_changed_at,
             "error": self._error_message,
         }
 
     def _transition_to(self, new_state: ComponentState, reason: str = ""):
         """執行狀態轉換（附合法性檢查）"""
-        valid = _VALID_TRANSITIONS.get(self._state, set())
+        valid = _VALID_TRANSITIONS.get(self._component_state, set())
         if new_state not in valid:
             self._logger.warning(
-                f"⚠️ 非法狀態轉換: {self._state} → {new_state} (reason: {reason})"
+                f"⚠️ 非法狀態轉換: {self._component_state} → {new_state} (reason: {reason})"
             )
             return
 
-        old = self._state
-        self._state = new_state
+        old = self._component_state
+        self._component_state = new_state
         self._state_changed_at = time.time()
 
         if new_state == ComponentState.FAULTED:
@@ -114,4 +129,4 @@ class Component:
 
     def is_healthy(self) -> bool:
         """判斷元件是否健康（RUNNING 或 DEGRADED 視為可用）"""
-        return self._state in (ComponentState.RUNNING, ComponentState.DEGRADED)
+        return self._component_state in (ComponentState.RUNNING, ComponentState.DEGRADED)
