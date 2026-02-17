@@ -39,8 +39,13 @@ from app.llm.advisor import llm_advisor
 # ═══════════════════════════════════════════════════════════════
 # 日誌設定
 # ═══════════════════════════════════════════════════════════════
+_log_level_str = config.LOG_LEVEL.upper() if hasattr(config, "LOG_LEVEL") else "INFO"
+_log_level = getattr(logging, _log_level_str, None)
+if not isinstance(_log_level, int):
+    _log_level = logging.INFO  # fallback: 20
+
 logging.basicConfig(
-    level=getattr(logging, config.LOG_LEVEL, logging.INFO),
+    level=_log_level,
     format="%(asctime)s | %(name)-30s | %(levelname)-7s | %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
     handlers=[
