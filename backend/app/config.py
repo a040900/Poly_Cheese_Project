@@ -15,7 +15,7 @@ load_dotenv(BASE_DIR / ".env")
 # 系統設定
 # ═══════════════════════════════════════════════════════════════
 APP_NAME = "CheeseDog Polymarket Intelligent Trading Assistant"
-VERSION = "1.0.0"
+VERSION = "2.0.0"
 BACKEND_HOST = os.getenv("BACKEND_HOST", "0.0.0.0")
 BACKEND_PORT = int(os.getenv("BACKEND_PORT", "8888"))
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
@@ -38,11 +38,11 @@ BINANCE_SYMBOL = "BTCUSDT"
 
 # 訂單簿設定
 OB_LEVELS = 20              # 訂單簿深度層級
-OB_POLL_INTERVAL = 2        # 輪詢間隔（秒）
+OB_POLL_INTERVAL = 5        # 輪詢間隔（秒）— 原為 2 秒，降低 CPU 負載
 
 # 交易數據保留
 TRADE_TTL = 600             # 保留最近 10 分鐘交易數據
-TRADE_MAX_BUFFER = 5000     # 交易數據最大緩衝
+TRADE_MAX_BUFFER = 2000     # 交易數據最大緩衝（降低以減少 CPU 用量）
 
 # K 線設定
 KLINE_INTERVAL = "1m"       # K 線時間間隔
@@ -187,7 +187,15 @@ TRADING_MODES = {
 # 模擬交易設定
 # ═══════════════════════════════════════════════════════════════
 SIM_INITIAL_BALANCE = float(os.getenv("SIM_INITIAL_BALANCE", "1000.0"))
-SIM_FEE_PCT = 0.001         # 模擬手續費 0.1%
+SIM_FEE_PCT = 0.001         # 模擬手續費 0.1%（Phase 1 簡化值）
+
+# Phase 2: Polymarket 15m 市場浮動手續費（借鏡 NautilusTrader 文件）
+# Buy 端手續費: 0.2% - 1.6%（從 Token 扣除）
+# Sell 端手續費: 0.8% - 3.7%（從 USDC 扣除）
+PM_FEE_BUY_RANGE = (0.002, 0.016)    # Buy 手續費範圍
+PM_FEE_SELL_RANGE = (0.008, 0.037)   # Sell 手續費範圍
+PM_FEE_BUY_DEFAULT = 0.005           # 預設 Buy 手續費 0.5%
+PM_FEE_SELL_DEFAULT = 0.015          # 預設 Sell 手續費 1.5%
 
 # ═══════════════════════════════════════════════════════════════
 # 安全設定

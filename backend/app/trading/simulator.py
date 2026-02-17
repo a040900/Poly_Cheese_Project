@@ -9,6 +9,7 @@ from typing import Optional, Dict, List
 
 from app import config
 from app.database import db
+from app.strategy.fees import fee_model
 
 logger = logging.getLogger("cheesedog.trading.simulator")
 
@@ -102,23 +103,30 @@ class SimulationEngine:
             logger.warning(f"資金不足: 需要 ${amount:.2f}, 可用 ${self.balance:.2f}")
             return None
 
-        # 計算手續費
-        fee = amount * config.SIM_FEE_PCT
+        # 計算手續費（Phase 2: 使用 Polymarket 浮動費率）
+        # BUY_UP 方向 = 買入 UP 合約，SELL_DOWN 方向 = 買入 DOWN 合約
+        # 兩者在開倉時都是 "buy" 操作
+        fee_result = fee_model.calculate_buy_fee(amount, contract_price=0.5)
+        fee = fee_result.fee_amount
 
         # 記錄到資料庫
         trade_data = {
             "trade_type": "simulation",
             "direction": direction,
             "entry_time": time.time(),
-            "entry_price": signal.get("score", 0),  # 使用信號分數作為參考
+            "entry_price": signal.get("score", 0),
             "quantity": amount,
             "fee": fee,
+            "fee_rate": fee_result.fee_rate,
             "signal_score": signal.get("score", 0),
             "trading_mode": signal.get("mode", "balanced"),
             "status": "open",
             "metadata": {
                 "confidence": signal.get("confidence"),
                 "indicators": signal.get("indicators", {}),
+                "fee_model": "polymarket_15m",
+                "fee_side": "buy",
+                "fee_deducted_in": fee_result.fee_deducted_in,
             },
         }
         trade_id = db.save_trade(trade_data)
@@ -172,11 +180,15 @@ class SimulationEngine:
         else:  # SELL_DOWN
             won = market_result == "DOWN"
 
-        # 計算盈虧
+        # 計算盈虧（Phase 2: 含 Sell 端手續費）
         # Polymarket: 勝利 = 獲得約 (1/price - 1) * quantity 的利潤
-        # 簡化模擬: 勝利獲得 quantity * 0.9 利潤, 失敗損失 quantity
+        # 結算時賣出（或贖回），需扣除 Sell 端手續費
         if won:
-            trade.pnl = trade.quantity * 0.85  # 模擬回報率約 85%
+            gross_profit = trade.quantity * 0.85  # 模擬回報率約 85%
+            sell_fee = fee_model.calculate_sell_fee(
+                trade.quantity + gross_profit, contract_price=0.5
+            )
+            trade.pnl = gross_profit - sell_fee.fee_amount
             self.balance += trade.quantity + trade.pnl
         else:
             trade.pnl = -trade.quantity
