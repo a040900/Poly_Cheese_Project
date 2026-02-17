@@ -234,6 +234,191 @@
 
         </div>
 
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <!-- Phase 2: 擴充面板區 -->
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <section class="phase2-tabs" id="phase2-tabs">
+            <div class="tab-bar">
+                <button class="tab-btn active" data-tab="tab-performance" id="tabBtn-performance">📊 績效報告</button>
+                <button class="tab-btn" data-tab="tab-backtest" id="tabBtn-backtest">🔬 回測引擎</button>
+                <button class="tab-btn" data-tab="tab-ai" id="tabBtn-ai">🤖 AI 建議</button>
+                <button class="tab-btn" data-tab="tab-health" id="tabBtn-health">🩺 元件健康</button>
+            </div>
+
+            <!-- ── Tab: 績效報告 ─────────────────────────────── -->
+            <div class="tab-content active" id="tab-performance">
+                <div class="perf-grid">
+                    <div class="perf-kpi-row" id="perf-kpi-row">
+                        <div class="kpi-card">
+                            <span class="kpi-label">勝率</span>
+                            <span class="kpi-value" id="perf-winrate">--</span>
+                        </div>
+                        <div class="kpi-card">
+                            <span class="kpi-label">收益因子</span>
+                            <span class="kpi-value" id="perf-profit-factor">--</span>
+                        </div>
+                        <div class="kpi-card">
+                            <span class="kpi-label">夏普比率</span>
+                            <span class="kpi-value" id="perf-sharpe">--</span>
+                        </div>
+                        <div class="kpi-card">
+                            <span class="kpi-label">最大回撤</span>
+                            <span class="kpi-value kpi-negative" id="perf-max-dd">--</span>
+                        </div>
+                        <div class="kpi-card">
+                            <span class="kpi-label">總 PnL</span>
+                            <span class="kpi-value" id="perf-total-pnl">--</span>
+                        </div>
+                        <div class="kpi-card">
+                            <span class="kpi-label">手續費</span>
+                            <span class="kpi-value kpi-negative" id="perf-total-fees">--</span>
+                        </div>
+                    </div>
+                    <div class="perf-chart-area">
+                        <h3 class="chart-title">📈 權益曲線</h3>
+                        <canvas id="equity-canvas" width="800" height="250"></canvas>
+                    </div>
+                    <div class="perf-mode-breakdown" id="perf-mode-breakdown">
+                        <h3 class="chart-title">模式分組統計</h3>
+                        <div class="mode-stats-table" id="mode-stats-table">
+                            <div class="mode-stats-empty">尚無資料</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="panel-footer">
+                    <button class="btn btn-sm btn-outline" id="btn-refresh-perf">🔄 刷新績效</button>
+                </div>
+            </div>
+
+            <!-- ── Tab: 回測引擎 ─────────────────────────────── -->
+            <div class="tab-content" id="tab-backtest">
+                <div class="backtest-controls">
+                    <div class="bt-form">
+                        <div class="bt-field">
+                            <label>交易模式</label>
+                            <select id="bt-mode">
+                                <option value="balanced">⚖️ 平衡</option>
+                                <option value="aggressive">🔥 積極</option>
+                                <option value="conservative">🛡️ 保守</option>
+                            </select>
+                        </div>
+                        <div class="bt-field">
+                            <label>初始資金</label>
+                            <input type="number" id="bt-balance" value="1000" min="100" step="100">
+                        </div>
+                        <div class="bt-field">
+                            <label>快照上限</label>
+                            <input type="number" id="bt-limit" value="5000" min="100" step="500">
+                        </div>
+                        <div class="bt-field">
+                            <label>含手續費</label>
+                            <input type="checkbox" id="bt-fees" checked>
+                        </div>
+                    </div>
+                    <div class="bt-actions">
+                        <button class="btn btn-primary btn-sm" id="btn-run-backtest">▶ 執行回測</button>
+                        <button class="btn btn-outline btn-sm" id="btn-run-compare">📊 三模式比較</button>
+                    </div>
+                </div>
+
+                <div class="bt-status" id="bt-status" style="display:none;">
+                    <div class="spinner"></div>
+                    <span>回測執行中...</span>
+                </div>
+
+                <div class="bt-results" id="bt-results" style="display:none;">
+                    <h3 class="chart-title">🔬 回測結果</h3>
+                    <div class="bt-summary" id="bt-summary"></div>
+                    <div class="bt-equity-area">
+                        <canvas id="bt-equity-canvas" width="800" height="200"></canvas>
+                    </div>
+                </div>
+
+                <div class="bt-compare-results" id="bt-compare-results" style="display:none;">
+                    <h3 class="chart-title">📊 三模式比較</h3>
+                    <div class="compare-table" id="compare-table"></div>
+                </div>
+            </div>
+
+            <!-- ── Tab: AI 建議 ──────────────────────────────── -->
+            <div class="tab-content" id="tab-ai">
+                <div class="ai-actions-bar">
+                    <button class="btn btn-sm btn-outline" id="btn-get-context">📋 取得上下文</button>
+                    <button class="btn btn-sm btn-outline" id="btn-get-prompt">📝 產生 Prompt</button>
+                    <button class="btn btn-sm btn-outline" id="btn-refresh-ai">🔄 刷新建議歷史</button>
+                </div>
+
+                <div class="ai-context-area" id="ai-context-area" style="display:none;">
+                    <h3 class="chart-title">📋 系統上下文 (可複製給 AI)</h3>
+                    <pre class="ai-json-display" id="ai-context-json"></pre>
+                </div>
+
+                <div class="ai-prompt-area" id="ai-prompt-area" style="display:none;">
+                    <h3 class="chart-title">📝 分析 Prompt</h3>
+                    <div class="prompt-focus-selector">
+                        <select id="ai-focus">
+                            <option value="general">🔎 全面分析</option>
+                            <option value="signal">📡 信號品質</option>
+                            <option value="risk">⚠️ 風險評估</option>
+                            <option value="mode_switch">🔄 模式切換</option>
+                        </select>
+                    </div>
+                    <pre class="ai-prompt-display" id="ai-prompt-text"></pre>
+                    <button class="btn btn-sm btn-primary" id="btn-copy-prompt">📋 複製 Prompt</button>
+                </div>
+
+                <div class="ai-advice-list" id="ai-advice-list">
+                    <h3 class="chart-title">📬 建議歷史</h3>
+                    <div class="advice-empty" id="advice-empty">尚無 AI 建議記錄</div>
+                    <div id="advice-items"></div>
+                </div>
+
+                <div class="ai-stats-bar" id="ai-stats-bar">
+                    <span id="ai-stats-text">收到: 0 | 已套用: 0 | 拒絕: 0</span>
+                </div>
+            </div>
+
+            <!-- ── Tab: 元件健康 ─────────────────────────────── -->
+            <div class="tab-content" id="tab-health">
+                <div class="health-grid" id="health-grid">
+                    <div class="health-card" id="health-binance">
+                        <div class="health-icon">📡</div>
+                        <div class="health-name">Binance Feed</div>
+                        <div class="health-state" id="health-binance-state">--</div>
+                        <div class="health-detail" id="health-binance-detail"></div>
+                    </div>
+                    <div class="health-card" id="health-polymarket">
+                        <div class="health-icon">🎰</div>
+                        <div class="health-name">Polymarket Feed</div>
+                        <div class="health-state" id="health-polymarket-state">--</div>
+                        <div class="health-detail" id="health-polymarket-detail"></div>
+                    </div>
+                    <div class="health-card" id="health-chainlink">
+                        <div class="health-icon">🔗</div>
+                        <div class="health-name">Chainlink Feed</div>
+                        <div class="health-state" id="health-chainlink-state">--</div>
+                        <div class="health-detail" id="health-chainlink-detail"></div>
+                    </div>
+                </div>
+                <div class="health-bus-stats" id="health-bus-stats">
+                    <h3 class="chart-title">🚌 MessageBus 統計</h3>
+                    <div class="bus-stats-grid" id="bus-stats-grid">
+                        <div class="bus-stat"><span class="bus-label">已發佈</span><span class="bus-value"
+                                id="bus-published">--</span></div>
+                        <div class="bus-stat"><span class="bus-label">已處理</span><span class="bus-value"
+                                id="bus-processed">--</span></div>
+                        <div class="bus-stat"><span class="bus-label">錯誤數</span><span class="bus-value"
+                                id="bus-errors">--</span></div>
+                        <div class="bus-stat"><span class="bus-label">佇列中</span><span class="bus-value"
+                                id="bus-queue">--</span></div>
+                    </div>
+                </div>
+                <div class="panel-footer">
+                    <button class="btn btn-sm btn-outline" id="btn-refresh-health">🔄 刷新健康狀態</button>
+                </div>
+            </div>
+        </section>
+
         <!-- ── 底部控制列 ─────────────────────────────────── -->
         <section class="control-bar" id="control-bar">
             <!-- 交易模式選擇器 -->

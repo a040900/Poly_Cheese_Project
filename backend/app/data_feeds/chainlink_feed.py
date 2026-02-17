@@ -1,6 +1,10 @@
 """
 🧀 CheeseDog - Chainlink 鏈上價格獲取模組
 透過 Polygon RPC 從 Chainlink 預言機獲取 BTC/USD 實時價格。
+
+Phase 2 變更：
+- 繼承 Component 基類，具備 ComponentState 生命週期
+- 透過 MessageBus 發佈 chainlink.price 事件
 """
 
 import asyncio
@@ -11,6 +15,8 @@ from typing import Optional, Callable
 import aiohttp
 
 from app import config
+from app.core.state import Component, ComponentState
+from app.core.event_bus import bus
 
 logger = logging.getLogger("cheesedog.feeds.chainlink")
 
@@ -30,17 +36,18 @@ class ChainlinkState:
         self.error: Optional[str] = None
 
 
-class ChainlinkFeed:
+class ChainlinkFeed(Component):
     """Chainlink 鏈上價格訂閱管理器"""
 
     def __init__(self):
+        super().__init__("feeds.chainlink")
         self.state = ChainlinkState()
         self._running = False
         self._tasks: list[asyncio.Task] = []
         self._on_update: Optional[Callable] = None
 
     def set_update_callback(self, callback: Callable):
-        """設定數據更新回調函數"""
+        """設定數據更新回調函數（向後相容）"""
         self._on_update = callback
 
     async def start(self):
@@ -48,6 +55,7 @@ class ChainlinkFeed:
         if self._running:
             return
         self._running = True
+        self.set_ready()
 
         logger.info("🟢 啟動 Chainlink BTC/USD 價格訂閱")
 
@@ -58,6 +66,7 @@ class ChainlinkFeed:
         self._tasks = [
             asyncio.create_task(self._price_poller()),
         ]
+        self.set_running()
 
     async def stop(self):
         """停止價格輪詢"""
@@ -66,6 +75,7 @@ class ChainlinkFeed:
             task.cancel()
         self._tasks.clear()
         self.state.connected = False
+        self.set_stopped()
         logger.info("🔴 Chainlink 價格訂閱已停止")
 
     async def _eth_call(self, data: str) -> Optional[str]:
@@ -146,6 +156,14 @@ class ChainlinkFeed:
 
             logger.debug(f"📈 Chainlink BTC/USD: ${price:,.2f}")
 
+            # 🚌 發佈事件到 MessageBus
+            bus.publish(
+                "chainlink.price",
+                {"btc_price": price, "updated_at": updated_at},
+                source=self._name,
+            )
+
+            # 向後相容：舊回調
             if self._on_update:
                 self._on_update("chainlink", "price_update")
 
@@ -175,4 +193,6 @@ class ChainlinkFeed:
             "btc_price": self.state.btc_price,
             "updated_at": self.state.updated_at,
             "decimals": self.state.decimals,
+            # Phase 2: 加入元件狀態
+            "component_state": self._state.value,
         }

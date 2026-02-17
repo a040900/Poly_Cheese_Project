@@ -9,8 +9,15 @@
     // ═══════════════════════════════════════════════════════════
     // 常數與狀態
     // ═══════════════════════════════════════════════════════════
-    // 自動偵測子路徑（支援反向代理，如 /polycheese）
-    const basePath = location.pathname.replace(/\/+$/, ''); // 移除尾部 /
+    // 自動偵測子路徑（支援反向代理，如 /cheesedog）
+    // 優先使用 <base> 標籤中的 href（由伺服器端動態注入），fallback 到 location.pathname
+    const baseEl = document.querySelector('base');
+    let basePath = '';
+    if (baseEl && baseEl.getAttribute('href')) {
+        basePath = baseEl.getAttribute('href').replace(/\/+$/, '');
+    } else {
+        basePath = location.pathname.replace(/\/+$/, '');
+    }
     const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const WS_URL = `${wsProto}//${location.host}${basePath}/ws`;
     const API_BASE = `${location.protocol}//${location.host}${basePath}/api`;
@@ -678,5 +685,489 @@
             setTimeout(() => toast.remove(), 300);
         }, 2500);
     }
+
+    // ═══════════════════════════════════════════════════════════
+    // Phase 2: Tab 切換系統
+    // ═══════════════════════════════════════════════════════════
+    function initTabs() {
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const tabId = btn.dataset.tab;
+                // 切換按鈕 active
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                // 切換內容 active
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                const content = document.getElementById(tabId);
+                if (content) content.classList.add('active');
+            });
+        });
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // Phase 2: 績效面板
+    // ═══════════════════════════════════════════════════════════
+    async function fetchPerformance() {
+        try {
+            const resp = await fetch(`${API_BASE}/performance`);
+            const data = await resp.json();
+            renderPerformance(data);
+        } catch (e) {
+            console.error('績效資料載入失敗:', e);
+        }
+    }
+
+    function renderPerformance(data) {
+        if (!data || !data.summary) return;
+        const s = data.summary;
+        const dd = data.drawdown || {};
+
+        setTextContent('perf-winrate', `${s.win_rate || 0}%`);
+        setTextContent('perf-profit-factor', s.profit_factor || '--');
+        setTextContent('perf-sharpe', s.sharpe_ratio || '--');
+        setTextContent('perf-max-dd', `-${dd.max_dd_pct || 0}%`);
+
+        const pnlEl = document.getElementById('perf-total-pnl');
+        if (pnlEl) {
+            const pnl = s.total_pnl || 0;
+            pnlEl.textContent = `${pnl >= 0 ? '+' : ''}$${formatNumber(pnl, 2)}`;
+            pnlEl.className = 'kpi-value ' + (pnl >= 0 ? 'kpi-positive' : 'kpi-negative');
+        }
+        setTextContent('perf-total-fees', `$${formatNumber(s.total_fees || 0, 4)}`);
+
+        // 權益曲線
+        if (data.equity_curve && data.equity_curve.length > 1) {
+            drawEquityCurve('equity-canvas', data.equity_curve);
+        }
+
+        // 模式分組
+        renderModeStats(data.by_mode);
+    }
+
+    function renderModeStats(byMode) {
+        const el = document.getElementById('mode-stats-table');
+        if (!el || !byMode || Object.keys(byMode).length === 0) return;
+
+        let html = `<div class="mode-stats-header">
+            <span>模式</span><span>交易</span><span>勝率</span>
+            <span>PnL</span><span>收益因子</span><span>期望值</span>
+        </div>`;
+
+        for (const [mode, stats] of Object.entries(byMode)) {
+            const pnlClass = stats.total_pnl >= 0 ? 'kpi-positive' : 'kpi-negative';
+            html += `<div class="mode-stats-row">
+                <span>${mode}</span>
+                <span>${stats.trades}</span>
+                <span>${stats.win_rate}%</span>
+                <span class="${pnlClass}">$${formatNumber(stats.total_pnl, 2)}</span>
+                <span>${stats.profit_factor}</span>
+                <span>${formatNumber(stats.expectancy, 4)}</span>
+            </div>`;
+        }
+        el.innerHTML = html;
+    }
+
+    function drawEquityCurve(canvasId, curve) {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas || !curve || curve.length < 2) return;
+        const ctx = canvas.getContext('2d');
+
+        const dpr = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        ctx.scale(dpr, dpr);
+
+        const w = rect.width;
+        const h = rect.height;
+        const pad = { top: 15, right: 15, bottom: 20, left: 55 };
+
+        ctx.clearRect(0, 0, w, h);
+
+        const minVal = Math.min(...curve);
+        const maxVal = Math.max(...curve);
+        const range = maxVal - minVal || 1;
+        const plotW = w - pad.left - pad.right;
+        const plotH = h - pad.top - pad.bottom;
+
+        // 初始值線
+        const initY = pad.top + plotH * (1 - (curve[0] - minVal) / range);
+        ctx.beginPath();
+        ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--border-color');
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.moveTo(pad.left, initY);
+        ctx.lineTo(w - pad.right, initY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // 曲線
+        ctx.beginPath();
+        curve.forEach((val, i) => {
+            const x = pad.left + (i / (curve.length - 1)) * plotW;
+            const y = pad.top + plotH * (1 - (val - minVal) / range);
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        });
+
+        const lastVal = curve[curve.length - 1];
+        const lineColor = lastVal >= curve[0] ? '#22c55e' : '#ef4444';
+        ctx.strokeStyle = lineColor;
+        ctx.lineWidth = 2;
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+
+        // 漸變
+        const gradient = ctx.createLinearGradient(0, pad.top, 0, h - pad.bottom);
+        gradient.addColorStop(0, lastVal >= curve[0] ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0)');
+        gradient.addColorStop(1, lastVal >= curve[0] ? 'rgba(34,197,94,0)' : 'rgba(239,68,68,0.12)');
+        ctx.lineTo(pad.left + plotW, h - pad.bottom);
+        ctx.lineTo(pad.left, h - pad.bottom);
+        ctx.closePath();
+        ctx.fillStyle = gradient;
+        ctx.fill();
+
+        // Y 軸
+        ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--text-muted');
+        ctx.font = '10px JetBrains Mono, monospace';
+        ctx.textAlign = 'right';
+        ctx.fillText(`$${maxVal.toFixed(0)}`, pad.left - 5, pad.top + 4);
+        ctx.fillText(`$${minVal.toFixed(0)}`, pad.left - 5, h - pad.bottom + 4);
+
+        // 末端圓點
+        const lastX = w - pad.right;
+        const lastY = pad.top + plotH * (1 - (lastVal - minVal) / range);
+        ctx.beginPath();
+        ctx.arc(lastX, lastY, 4, 0, Math.PI * 2);
+        ctx.fillStyle = lineColor;
+        ctx.fill();
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // Phase 2: 回測面板
+    // ═══════════════════════════════════════════════════════════
+    async function runBacktest() {
+        const status = document.getElementById('bt-status');
+        const results = document.getElementById('bt-results');
+        const compare = document.getElementById('bt-compare-results');
+
+        status.style.display = 'flex';
+        results.style.display = 'none';
+        compare.style.display = 'none';
+
+        const body = {
+            mode: document.getElementById('bt-mode').value,
+            initial_balance: parseFloat(document.getElementById('bt-balance').value) || 1000,
+            limit: parseInt(document.getElementById('bt-limit').value) || 5000,
+            use_fees: document.getElementById('bt-fees').checked,
+        };
+
+        try {
+            const resp = await fetch(`${API_BASE}/backtest`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            const data = await resp.json();
+            status.style.display = 'none';
+            renderBacktestResult(data);
+        } catch (e) {
+            status.style.display = 'none';
+            showToast('❌ 回測失敗: ' + e.message);
+        }
+    }
+
+    async function runCompare() {
+        const status = document.getElementById('bt-status');
+        const results = document.getElementById('bt-results');
+        const compare = document.getElementById('bt-compare-results');
+
+        status.style.display = 'flex';
+        results.style.display = 'none';
+        compare.style.display = 'none';
+
+        const body = {
+            initial_balance: parseFloat(document.getElementById('bt-balance').value) || 1000,
+            limit: parseInt(document.getElementById('bt-limit').value) || 5000,
+        };
+
+        try {
+            const resp = await fetch(`${API_BASE}/backtest/compare`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            const data = await resp.json();
+            status.style.display = 'none';
+            renderCompareResult(data);
+        } catch (e) {
+            status.style.display = 'none';
+            showToast('❌ 比較失敗: ' + e.message);
+        }
+    }
+
+    function renderBacktestResult(data) {
+        if (data.error) {
+            showToast('⚠️ ' + data.error);
+            return;
+        }
+
+        const results = document.getElementById('bt-results');
+        results.style.display = 'block';
+
+        const s = data.summary || {};
+        const info = data.backtest_info || {};
+        const dd = data.drawdown || {};
+
+        const summaryEl = document.getElementById('bt-summary');
+        const pnlClass = (s.total_pnl || 0) >= 0 ? 'kpi-positive' : 'kpi-negative';
+        summaryEl.innerHTML = `<div class="bt-summary-grid">
+            <div class="bt-summary-item">
+                <span class="bt-summary-label">交易數</span>
+                <span class="bt-summary-value">${s.total_trades || 0}</span>
+            </div>
+            <div class="bt-summary-item">
+                <span class="bt-summary-label">勝率</span>
+                <span class="bt-summary-value">${s.win_rate || 0}%</span>
+            </div>
+            <div class="bt-summary-item">
+                <span class="bt-summary-label">PnL</span>
+                <span class="bt-summary-value ${pnlClass}">${s.total_pnl >= 0 ? '+' : ''}$${formatNumber(s.total_pnl, 2)}</span>
+            </div>
+            <div class="bt-summary-item">
+                <span class="bt-summary-label">報酬率</span>
+                <span class="bt-summary-value ${pnlClass}">${s.total_return_pct >= 0 ? '+' : ''}${s.total_return_pct}%</span>
+            </div>
+            <div class="bt-summary-item">
+                <span class="bt-summary-label">夏普</span>
+                <span class="bt-summary-value">${s.sharpe_ratio || 0}</span>
+            </div>
+            <div class="bt-summary-item">
+                <span class="bt-summary-label">最大回撤</span>
+                <span class="bt-summary-value kpi-negative">-${dd.max_dd_pct || 0}%</span>
+            </div>
+            <div class="bt-summary-item">
+                <span class="bt-summary-label">手續費</span>
+                <span class="bt-summary-value">$${formatNumber(s.total_fees, 4)}</span>
+            </div>
+            <div class="bt-summary-item">
+                <span class="bt-summary-label">耗時</span>
+                <span class="bt-summary-value">${info.elapsed_seconds || 0}s</span>
+            </div>
+        </div>`;
+
+        if (data.equity_curve && data.equity_curve.length > 1) {
+            drawEquityCurve('bt-equity-canvas', data.equity_curve);
+        }
+    }
+
+    function renderCompareResult(data) {
+        if (!data.comparison) return;
+
+        const compare = document.getElementById('bt-compare-results');
+        compare.style.display = 'block';
+
+        const tbl = document.getElementById('compare-table');
+        let html = `<div class="compare-table-grid">
+            <div class="compare-header">
+                <span>模式</span><span>PnL</span><span>報酬率</span>
+                <span>勝率</span><span>夏普</span><span>交易數</span><span>手續費</span>
+            </div>`;
+
+        for (const [mode, d] of Object.entries(data.comparison)) {
+            if (d.error) continue;
+            const isBest = mode === data.best_mode;
+            const pnlClass = (d.total_pnl || 0) >= 0 ? 'kpi-positive' : 'kpi-negative';
+            html += `<div class="compare-row ${isBest ? 'best' : ''}">
+                <span>${isBest ? '🏆 ' : ''}${mode}</span>
+                <span class="${pnlClass}">${d.total_pnl >= 0 ? '+' : ''}$${formatNumber(d.total_pnl, 2)}</span>
+                <span>${d.total_return_pct >= 0 ? '+' : ''}${d.total_return_pct}%</span>
+                <span>${d.win_rate}%</span>
+                <span>${d.sharpe_ratio}</span>
+                <span>${d.total_trades}</span>
+                <span>$${formatNumber(d.total_fees, 4)}</span>
+            </div>`;
+        }
+        html += '</div>';
+        tbl.innerHTML = html;
+
+        if (data.best_mode) {
+            showToast(`🏆 回測最佳模式: ${data.best_mode}`);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // Phase 2: AI 建議面板
+    // ═══════════════════════════════════════════════════════════
+    async function fetchAIContext() {
+        try {
+            const resp = await fetch(`${API_BASE}/llm/context`);
+            const data = await resp.json();
+            const area = document.getElementById('ai-context-area');
+            const json = document.getElementById('ai-context-json');
+            area.style.display = 'block';
+            json.textContent = JSON.stringify(data, null, 2);
+        } catch (e) {
+            showToast('❌ 取得上下文失敗');
+        }
+    }
+
+    async function fetchAIPrompt() {
+        const focus = document.getElementById('ai-focus').value;
+        try {
+            const resp = await fetch(`${API_BASE}/llm/prompt?focus=${focus}`);
+            const data = await resp.json();
+            const area = document.getElementById('ai-prompt-area');
+            const text = document.getElementById('ai-prompt-text');
+            area.style.display = 'block';
+            text.textContent = data.prompt || '';
+        } catch (e) {
+            showToast('❌ 產生 Prompt 失敗');
+        }
+    }
+
+    async function fetchAIHistory() {
+        try {
+            const [histResp, statsResp] = await Promise.all([
+                fetch(`${API_BASE}/llm/history`),
+                fetch(`${API_BASE}/llm/stats`),
+            ]);
+            const history = await histResp.json();
+            const stats = await statsResp.json();
+
+            renderAIHistory(history);
+            setTextContent('ai-stats-text',
+                `收到: ${stats.total_received || 0} | 已套用: ${stats.applied || 0} | 拒絕: ${stats.rejected || 0}`);
+        } catch (e) {
+            console.error('AI 歷史載入失敗:', e);
+        }
+    }
+
+    function renderAIHistory(history) {
+        const items = document.getElementById('advice-items');
+        const empty = document.getElementById('advice-empty');
+        if (!items) return;
+
+        if (!history || history.length === 0) {
+            empty.style.display = 'block';
+            items.innerHTML = '';
+            return;
+        }
+
+        empty.style.display = 'none';
+        items.innerHTML = history.map(a => {
+            const time = new Date(a.timestamp * 1000).toLocaleString('zh-TW');
+            const action = a.advice_type || 'HOLD';
+            const ctx = a.market_context || {};
+            return `<div class="advice-card">
+                <div class="advice-card-header">
+                    <span class="advice-action ${action}">${action}</span>
+                    <span class="advice-time">${time}</span>
+                </div>
+                <div class="advice-body">${a.reasoning || '無說明'}</div>
+                <div class="advice-meta">
+                    <span>推薦: ${a.recommended_mode || '--'}</span>
+                    <span>信心: ${ctx.confidence || 0}%</span>
+                    <span>風險: ${ctx.risk_level || '--'}</span>
+                    <span>${a.applied ? '✅ 已套用' : '⏳ 未套用'}</span>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // Phase 2: 元件健康面板
+    // ═══════════════════════════════════════════════════════════
+    async function fetchHealth() {
+        try {
+            const [compResp, busResp] = await Promise.all([
+                fetch(`${API_BASE}/components`),
+                fetch(`${API_BASE}/bus/stats`),
+            ]);
+            const compData = await compResp.json();
+            const busData = await busResp.json();
+
+            renderComponentHealth(compData.components || []);
+            renderBusStats(busData);
+        } catch (e) {
+            console.error('健康狀態載入失敗:', e);
+        }
+    }
+
+    function renderComponentHealth(components) {
+        const nameMap = {
+            'BinanceFeed': 'binance',
+            'PolymarketFeed': 'polymarket',
+            'ChainlinkFeed': 'chainlink',
+        };
+
+        components.forEach(c => {
+            const key = nameMap[c.name] || c.name.toLowerCase();
+            const card = document.getElementById(`health-${key}`);
+            const stateEl = document.getElementById(`health-${key}-state`);
+            const detailEl = document.getElementById(`health-${key}-detail`);
+
+            if (card) {
+                card.className = 'health-card ' + (c.state || '').toLowerCase();
+            }
+            if (stateEl) {
+                stateEl.textContent = c.state || '--';
+            }
+            if (detailEl) {
+                const uptime = c.uptime_seconds ? `${Math.floor(c.uptime_seconds / 60)}m` : '--';
+                detailEl.textContent = `執行時間: ${uptime}`;
+            }
+        });
+    }
+
+    function renderBusStats(data) {
+        if (!data) return;
+        setTextContent('bus-published', formatNumber(data.total_published || 0, 0));
+        setTextContent('bus-processed', formatNumber(data.total_processed || 0, 0));
+        setTextContent('bus-errors', data.total_errors || 0);
+        setTextContent('bus-queue', data.queue_size || 0);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // Phase 2: 初始化和事件綁定
+    // ═══════════════════════════════════════════════════════════
+    function initPhase2() {
+        initTabs();
+
+        // 績效
+        document.getElementById('btn-refresh-perf')?.addEventListener('click', fetchPerformance);
+
+        // 回測
+        document.getElementById('btn-run-backtest')?.addEventListener('click', runBacktest);
+        document.getElementById('btn-run-compare')?.addEventListener('click', runCompare);
+
+        // AI
+        document.getElementById('btn-get-context')?.addEventListener('click', fetchAIContext);
+        document.getElementById('btn-get-prompt')?.addEventListener('click', fetchAIPrompt);
+        document.getElementById('ai-focus')?.addEventListener('change', fetchAIPrompt);
+        document.getElementById('btn-refresh-ai')?.addEventListener('click', fetchAIHistory);
+        document.getElementById('btn-copy-prompt')?.addEventListener('click', () => {
+            const text = document.getElementById('ai-prompt-text')?.textContent;
+            if (text) {
+                navigator.clipboard.writeText(text).then(() => showToast('📋 Prompt 已複製'));
+            }
+        });
+
+        // 健康
+        document.getElementById('btn-refresh-health')?.addEventListener('click', fetchHealth);
+
+        // 首次載入
+        fetchPerformance();
+        fetchAIHistory();
+        fetchHealth();
+    }
+
+    // 加入到 DOMContentLoaded（靠前面的已有，這裡補入 Phase 2）
+    document.addEventListener('DOMContentLoaded', initPhase2);
+
+    // resize 時重繪權益曲線
+    window.addEventListener('resize', () => {
+        fetchPerformance();
+    });
 
 })();

@@ -1,6 +1,11 @@
 """
 🧀 CheeseDog Polymarket 智慧交易輔助系統
 FastAPI 主應用程式 - 系統核心控制模組
+
+Phase 2 變更：
+- 整合 MessageBus 事件匯流排
+- signal_loop 改為事件驅動（收到 binance.kline / binance.orderbook 立即計算）
+- Dashboard 推播加入元件健康度資訊
 """
 
 import asyncio
@@ -18,6 +23,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import config
+from app.core.event_bus import bus, Event
 from app.data_feeds.binance_feed import BinanceFeed
 from app.data_feeds.polymarket_feed import PolymarketFeed
 from app.data_feeds.chainlink_feed import ChainlinkFeed
@@ -25,6 +31,10 @@ from app.strategy.signal_generator import SignalGenerator
 from app.trading.simulator import SimulationEngine
 from app.security.password_manager import password_manager
 from app.database import db
+from app.performance.tracker import PerformanceTracker
+from app.performance.backtester import run_backtest, run_mode_comparison
+from app.llm.prompt_builder import prompt_builder
+from app.llm.advisor import llm_advisor
 
 # ═══════════════════════════════════════════════════════════════
 # 日誌設定
@@ -52,22 +62,102 @@ polymarket_feed = PolymarketFeed()
 chainlink_feed = ChainlinkFeed()
 signal_generator = SignalGenerator()
 sim_engine = SimulationEngine()
+perf_tracker = PerformanceTracker(config.SIM_INITIAL_BALANCE)
 
 # WebSocket 連線管理
 ws_clients: Set[WebSocket] = set()
 
+# 信號生成節流：避免極短時間內重複計算
+_last_signal_time = 0.0
+_SIGNAL_MIN_INTERVAL = 2.0  # 最少間隔 2 秒
+
 
 # ═══════════════════════════════════════════════════════════════
-# 數據更新回調
+# 數據更新回調（向後相容，Phase 2 主要靠 MessageBus）
 # ═══════════════════════════════════════════════════════════════
 def on_data_update(source: str, event: str):
     """數據源更新時觸發"""
-    pass  # WebSocket 推播由定時器處理
+    pass  # 已由 MessageBus 接管
 
 
 binance_feed.set_update_callback(on_data_update)
 polymarket_feed.set_update_callback(on_data_update)
 chainlink_feed.set_update_callback(on_data_update)
+
+
+# ═══════════════════════════════════════════════════════════════
+# 事件驅動信號生成（Phase 2 步驟 11 核心）
+# ═══════════════════════════════════════════════════════════════
+async def on_market_data_event(event: Event):
+    """
+    當收到市場數據事件時，立即觸發信號計算。
+
+    訂閱的事件:
+    - binance.kline      (K 線更新)
+    - binance.orderbook  (訂單簿更新)
+    """
+    global _last_signal_time
+
+    # 節流：防止 binance.trade 高頻事件導致過度計算
+    now = time.time()
+    if now - _last_signal_time < _SIGNAL_MIN_INTERVAL:
+        return
+
+    _last_signal_time = now
+
+    try:
+        bs = binance_feed.state
+        if bs.mid <= 0 or not bs.klines:
+            return
+
+        # 合併當前 K 線
+        all_klines = list(bs.klines)
+        if bs.cur_kline:
+            all_klines.append(bs.cur_kline)
+
+        signal = signal_generator.generate_signal(
+            bs.bids, bs.asks, bs.mid, bs.trades, all_klines
+        )
+
+        # 儲存信號到資料庫
+        db.save_signal({
+            "direction": signal["direction"],
+            "score": signal["score"],
+            "confidence": signal["confidence"],
+            "trading_mode": signal["mode"],
+            "indicators": signal["indicators"],
+            "acted_on": False,
+        })
+
+        # 🚌 發佈信號事件
+        bus.publish("signal.generated", signal, source="signal_generator")
+
+        # 如果模擬交易啟動且有明確信號，嘗試自動交易
+        if sim_engine.is_running() and signal["direction"] != "NEUTRAL":
+            # 檢查是否已有同方向的未平倉交易
+            has_open = any(
+                t.direction == signal["direction"]
+                for t in sim_engine.open_trades
+            )
+            if not has_open:
+                sim_engine.execute_trade(signal)
+
+        # 保存市場快照
+        pm = polymarket_feed.state
+        cl = chainlink_feed.state
+        db.save_market_snapshot({
+            "btc_price": bs.mid,
+            "pm_up_price": pm.up_price,
+            "pm_down_price": pm.down_price,
+            "chainlink_price": cl.btc_price,
+            "bias_score": signal["score"],
+            "signal": signal["direction"],
+            "trading_mode": signal["mode"],
+            "indicators": signal["indicators"],
+        })
+
+    except Exception as e:
+        logger.error(f"事件驅動信號生成錯誤: {e}")
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -92,59 +182,18 @@ async def broadcast_loop():
         await asyncio.sleep(config.REFRESH_INTERVAL)
 
 
-async def signal_loop():
-    """定期生成交易信號"""
+async def settle_loop():
+    """
+    定期檢查並結算到期交易（保留定時器，因為結算依賴時間而非事件）
+    """
     while True:
         try:
             bs = binance_feed.state
-            if bs.mid > 0 and bs.klines:
-                # 合併當前 K 線
-                all_klines = list(bs.klines)
-                if bs.cur_kline:
-                    all_klines.append(bs.cur_kline)
-
-                signal = signal_generator.generate_signal(
-                    bs.bids, bs.asks, bs.mid, bs.trades, all_klines
-                )
-
-                # 儲存信號到資料庫
-                db.save_signal({
-                    "direction": signal["direction"],
-                    "score": signal["score"],
-                    "confidence": signal["confidence"],
-                    "trading_mode": signal["mode"],
-                    "indicators": signal["indicators"],
-                    "acted_on": False,
-                })
-
-                # 如果模擬交易啟動且有明確信號，嘗試自動交易
-                if sim_engine.is_running() and signal["direction"] != "NEUTRAL":
-                    # 檢查是否已有同方向的未平倉交易
-                    has_open = any(
-                        t.direction == signal["direction"]
-                        for t in sim_engine.open_trades
-                    )
-                    if not has_open:
-                        sim_engine.execute_trade(signal)
-
-                # 保存市場快照
-                pm = polymarket_feed.state
-                cl = chainlink_feed.state
-                db.save_market_snapshot({
-                    "btc_price": bs.mid,
-                    "pm_up_price": pm.up_price,
-                    "pm_down_price": pm.down_price,
-                    "chainlink_price": cl.btc_price,
-                    "bias_score": signal["score"],
-                    "signal": signal["direction"],
-                    "trading_mode": signal["mode"],
-                    "indicators": signal["indicators"],
-                })
-
+            if bs.mid > 0 and sim_engine.is_running():
+                sim_engine.auto_settle_expired(bs.mid, bs.mid)
         except Exception as e:
-            logger.error(f"信號生成循環錯誤: {e}")
-
-        await asyncio.sleep(10)  # 每 10 秒更新信號
+            logger.debug(f"結算循環錯誤: {e}")
+        await asyncio.sleep(30)  # 每 30 秒檢查一次
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -177,16 +226,20 @@ def build_dashboard_data() -> dict:
                 "connected": bs.connected,
                 "last_update": bs.last_update,
                 "error": bs.error,
+                # Phase 2: 元件健康度
+                "component_state": binance_feed.state_info["state"],
             },
             "polymarket": {
                 "connected": ps.connected,
                 "last_update": ps.last_update,
                 "error": ps.error,
+                "component_state": polymarket_feed.state_info["state"],
             },
             "chainlink": {
                 "connected": cs.connected,
                 "last_update": cs.last_update,
                 "error": cs.error,
+                "component_state": chainlink_feed.state_info["state"],
             },
         },
         "market": {
@@ -222,6 +275,8 @@ def build_dashboard_data() -> dict:
             "pnl_curve": sim_engine.get_pnl_curve(),
         },
         "security": password_manager.get_status(),
+        # Phase 2: MessageBus 統計
+        "event_bus": bus.get_stats(),
     }
 
 
@@ -236,6 +291,14 @@ async def lifespan(app: FastAPI):
     logger.info(f"   啟動中...")
     logger.info("=" * 60)
 
+    # Phase 2: 啟動 MessageBus
+    await bus.start()
+
+    # 註冊事件訂閱（信號生成改為事件驅動）
+    bus.subscribe("binance.kline", on_market_data_event)
+    bus.subscribe("binance.orderbook", on_market_data_event)
+    logger.info("📬 已註冊事件驅動信號生成 (binance.kline + binance.orderbook)")
+
     # 啟動數據訂閱
     await binance_feed.start()
     await polymarket_feed.start()
@@ -244,22 +307,27 @@ async def lifespan(app: FastAPI):
     # 啟動模擬交易
     sim_engine.start()
 
-    # 啟動背景任務
+    # 啟動背景任務（推播 + 結算，信號已改為事件驅動）
     broadcast_task = asyncio.create_task(broadcast_loop())
-    signal_task = asyncio.create_task(signal_loop())
+    settle_task = asyncio.create_task(settle_loop())
 
     logger.info("✅ 所有模組已啟動，系統就緒！")
+    logger.info(
+        f"🚌 信號引擎已切換至事件驅動模式 "
+        f"(取代舊版 10 秒輪詢)"
+    )
 
     yield
 
     # 關閉
     logger.info("🔴 正在關閉系統...")
     broadcast_task.cancel()
-    signal_task.cancel()
+    settle_task.cancel()
     sim_engine.stop()
     await binance_feed.stop()
     await polymarket_feed.stop()
     await chainlink_feed.stop()
+    await bus.stop()
     logger.info("👋 系統已安全關閉")
 
 
@@ -270,6 +338,7 @@ app = FastAPI(
     title=config.APP_NAME,
     version=config.VERSION,
     lifespan=lifespan,
+    root_path=config.ROOT_PATH,
 )
 
 # CORS 中間件
@@ -289,13 +358,29 @@ if frontend_dir.exists():
 
 # ── 前端頁面 ─────────────────────────────────────────────────
 
+from fastapi.responses import HTMLResponse
+
 @app.get("/")
 async def serve_frontend():
-    """提供前端頁面"""
+    """
+    提供前端頁面。
+    透過動態注入 <base> 標籤，確保在反向代理子路徑下
+    CSS/JS 等相對路徑資源也能正確載入。
+    """
     index_path = frontend_dir / "index.html"
-    if index_path.exists():
-        return FileResponse(str(index_path))
-    return JSONResponse({"message": f"🧀 {config.APP_NAME} API is running"})
+    if not index_path.exists():
+        return JSONResponse({"message": f"🧀 {config.APP_NAME} API is running"})
+
+    html = index_path.read_text(encoding="utf-8")
+
+    # 計算 <base> href: root_path + "/"
+    base_href = (config.ROOT_PATH or "") + "/"
+    base_tag = f'<base href="{base_href}">'
+
+    # 注入到 <head> 之後（在 <meta charset> 之前最佳）
+    html = html.replace("<head>", f"<head>\n    {base_tag}", 1)
+
+    return HTMLResponse(content=html, media_type="text/html")
 
 
 # ── WebSocket 端點 ───────────────────────────────────────────
@@ -464,6 +549,247 @@ async def get_security_status():
     return password_manager.get_status()
 
 
+# Phase 2: MessageBus 統計端點
+@app.get("/api/bus/stats")
+async def get_bus_stats():
+    """取得 MessageBus 事件匯流排統計"""
+    return bus.get_stats()
+
+
+# Phase 2: 元件健康度端點
+@app.get("/api/components")
+async def get_component_health():
+    """取得所有元件健康度"""
+    return {
+        "components": [
+            binance_feed.state_info,
+            polymarket_feed.state_info,
+            chainlink_feed.state_info,
+        ],
+    }
+
+
+# Phase 2 步驟 12: 績效追蹤 + 回測 API
+@app.get("/api/performance")
+async def get_performance():
+    """取得即時績效報告"""
+    return perf_tracker.get_report()
+
+
+@app.post("/api/backtest")
+async def api_backtest(data: dict = None):
+    """
+    執行歷史回測
+
+    Body (可選):
+        {
+            "mode": "balanced",
+            "initial_balance": 1000,
+            "limit": 5000,
+            "use_fees": true
+        }
+    """
+    data = data or {}
+    try:
+        result = run_backtest(
+            mode=data.get("mode", "balanced"),
+            initial_balance=data.get("initial_balance", 1000.0),
+            limit=data.get("limit", 5000),
+            use_fees=data.get("use_fees", True),
+        )
+        return result
+    except Exception as e:
+        logger.error(f"回測執行失敗: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.post("/api/backtest/compare")
+async def api_backtest_compare(data: dict = None):
+    """
+    比較所有交易模式的回測績效
+
+    Body (可選):
+        {
+            "initial_balance": 1000,
+            "limit": 5000
+        }
+    """
+    data = data or {}
+    try:
+        result = run_mode_comparison(
+            initial_balance=data.get("initial_balance", 1000.0),
+            limit=data.get("limit", 5000),
+        )
+        return result
+    except Exception as e:
+        logger.error(f"回測比較失敗: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+# Phase 2 步驟 13: LLM 智能整合 API
+@app.get("/api/llm/context")
+async def get_llm_context():
+    """
+    取得結構化系統上下文
+
+    宿主 AI 代理可透過此端點快速讀取完整的系統狀態。
+    """
+    bs = binance_feed.state
+    ps = polymarket_feed.state
+    cs = chainlink_feed.state
+    signal = signal_generator.last_signal or {}
+    indicators = signal_generator.last_indicators or {}
+
+    context = prompt_builder.build_context_snapshot(
+        market_data={
+            "btc_price": bs.mid,
+            "pm_up_price": ps.up_price,
+            "pm_down_price": ps.down_price,
+            "chainlink_price": cs.btc_price,
+            "pm_market_title": ps.market_title,
+            "pm_liquidity": ps.liquidity,
+            "pm_volume": ps.volume,
+            "trade_count": len(bs.trades),
+            "kline_count": len(bs.klines),
+        },
+        signal_data=signal,
+        indicators=indicators,
+        performance=perf_tracker.get_report(),
+        connections={
+            "binance": {"connected": bs.connected, "state": binance_feed.state_info["state"]},
+            "polymarket": {"connected": ps.connected, "state": polymarket_feed.state_info["state"]},
+            "chainlink": {"connected": cs.connected, "state": chainlink_feed.state_info["state"]},
+        },
+        sim_stats=sim_engine.get_stats(),
+    )
+    return context
+
+
+@app.get("/api/llm/prompt")
+async def get_llm_prompt(focus: str = "general"):
+    """
+    生成分析 prompt
+
+    Query params:
+        focus: general | signal | risk | mode_switch
+    """
+    bs = binance_feed.state
+    ps = polymarket_feed.state
+    cs = chainlink_feed.state
+    signal = signal_generator.last_signal or {}
+    indicators = signal_generator.last_indicators or {}
+
+    context = prompt_builder.build_context_snapshot(
+        market_data={
+            "btc_price": bs.mid,
+            "pm_up_price": ps.up_price,
+            "pm_down_price": ps.down_price,
+            "chainlink_price": cs.btc_price,
+            "pm_market_title": ps.market_title,
+            "pm_liquidity": ps.liquidity,
+            "pm_volume": ps.volume,
+            "trade_count": len(bs.trades),
+            "kline_count": len(bs.klines),
+        },
+        signal_data=signal,
+        indicators=indicators,
+        performance=perf_tracker.get_report(),
+        connections={},
+        sim_stats=sim_engine.get_stats(),
+    )
+
+    prompt_text = prompt_builder.build_analysis_prompt(context, focus=focus)
+    return {"prompt": prompt_text, "focus": focus}
+
+
+@app.post("/api/llm/advice")
+async def receive_llm_advice(data: dict):
+    """
+    接收 AI 代理的分析建議
+
+    Body:
+        {
+            "analysis": "分析文字",
+            "recommended_mode": "balanced",
+            "confidence": 85,
+            "risk_level": "LOW",
+            "action": "SWITCH_MODE",
+            "param_adjustments": { ... },
+            "reasoning": "理由",
+            "auto_apply": false
+        }
+    """
+    auto_apply = data.pop("auto_apply", False)
+    result = llm_advisor.process_advice(
+        advice_data=data,
+        signal_generator=signal_generator,
+        auto_apply=auto_apply,
+    )
+    return result
+
+
+@app.post("/api/llm/apply")
+async def apply_llm_advice(data: dict):
+    """
+    手動應用 AI 建議
+
+    當 auto_apply=false 時，可以透過此端點手動應用之前收到的建議。
+    """
+    last_advice = llm_advisor.get_last_advice()
+    if not last_advice:
+        return JSONResponse(status_code=404, content={"error": "無待應用的建議"})
+
+    # 從最近的建議中提取 advice_data
+    advice_data = {
+        "recommended_mode": last_advice.get("recommended_mode"),
+        "action": last_advice.get("advice_type"),
+        "param_adjustments": last_advice.get("market_context", {}).get("param_adjustments", {}),
+    }
+    result = llm_advisor.apply_advice(advice_data, signal_generator)
+    return result
+
+
+@app.get("/api/llm/stats")
+async def get_llm_stats():
+    """取得 LLM 建議處理統計"""
+    return llm_advisor.get_stats()
+
+
+@app.get("/api/llm/history")
+async def get_llm_history(limit: int = 20):
+    """取得 LLM 建議歷史"""
+    return llm_advisor.get_advice_history(limit)
+
+
+# ═══════════════════════════════════════════════════════════════
+# Phase 2: 元件健康度 & MessageBus 統計 API
+# ═══════════════════════════════════════════════════════════════
+
+@app.get("/api/components")
+async def get_components():
+    """取得所有元件的健康狀態"""
+    components = []
+    for comp in [binance_feed, polymarket_feed, chainlink_feed]:
+        info = comp.state_info
+        info["uptime_seconds"] = round(time.time() - info.get("since", time.time()), 1)
+        components.append(info)
+    return {"components": components}
+
+
+@app.get("/api/bus/stats")
+async def get_bus_stats():
+    """取得 MessageBus 統計"""
+    stats = bus.get_stats()
+    return {
+        "running": stats.get("running", False),
+        "total_published": stats.get("published", 0),
+        "total_processed": stats.get("processed", 0),
+        "total_errors": stats.get("errors", 0),
+        "queue_size": stats.get("queue_size", 0),
+        "subscriber_count": stats.get("subscriber_count", {}),
+    }
+
+
 # ═══════════════════════════════════════════════════════════════
 # 入口點
 # ═══════════════════════════════════════════════════════════════
@@ -473,6 +799,7 @@ if __name__ == "__main__":
         "app.main:app",
         host=config.BACKEND_HOST,
         port=config.BACKEND_PORT,
+        root_path=config.ROOT_PATH,
         reload=False,
         log_level="info",
     )

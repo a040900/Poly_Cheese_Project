@@ -1,6 +1,10 @@
 """
 🧀 CheeseDog - Binance 數據獲取模組
 透過 WebSocket 和 REST API 獲取 BTCUSDT 的實時與歷史數據。
+
+Phase 2 變更：
+- 繼承 Component 基類，具備 ComponentState 生命週期
+- 透過 MessageBus 發佈事件，取代舊的 callback 機制
 """
 
 import asyncio
@@ -12,6 +16,8 @@ from typing import Optional, Callable
 import aiohttp
 
 from app import config
+from app.core.state import Component, ComponentState
+from app.core.event_bus import bus
 
 logger = logging.getLogger("cheesedog.feeds.binance")
 
@@ -32,16 +38,17 @@ class BinanceState:
         self.klines: list[dict] = []
         self.cur_kline: Optional[dict] = None
 
-        # 連線狀態
+        # 連線狀態 (保留供向後相容)
         self.connected: bool = False
         self.last_update: float = 0.0
         self.error: Optional[str] = None
 
 
-class BinanceFeed:
+class BinanceFeed(Component):
     """Binance 數據訂閱管理器"""
 
     def __init__(self, symbol: str = config.BINANCE_SYMBOL):
+        super().__init__("feeds.binance")
         self.symbol = symbol
         self.state = BinanceState()
         self._running = False
@@ -49,7 +56,7 @@ class BinanceFeed:
         self._on_update: Optional[Callable] = None
 
     def set_update_callback(self, callback: Callable):
-        """設定數據更新回調函數"""
+        """設定數據更新回調函數（向後相容）"""
         self._on_update = callback
 
     async def start(self):
@@ -57,6 +64,7 @@ class BinanceFeed:
         if self._running:
             return
         self._running = True
+        self.set_ready()
 
         logger.info(f"🟢 啟動 Binance 數據訂閱 [{self.symbol}]")
 
@@ -68,6 +76,7 @@ class BinanceFeed:
             asyncio.create_task(self._ws_feed()),
             asyncio.create_task(self._ob_poller()),
         ]
+        self.set_running()
 
     async def stop(self):
         """停止所有數據訂閱"""
@@ -76,6 +85,7 @@ class BinanceFeed:
             task.cancel()
         self._tasks.clear()
         self.state.connected = False
+        self.set_stopped()
         logger.info("🔴 Binance 數據訂閱已停止")
 
     async def _bootstrap_klines(self):
@@ -125,6 +135,9 @@ class BinanceFeed:
                     ) as ws:
                         self.state.connected = True
                         self.state.error = None
+                        # 從 DEGRADED 恢復或正常確認
+                        if self._state in (ComponentState.DEGRADED, ComponentState.FAULTED):
+                            self.set_running()
                         logger.info(f"🔗 Binance WebSocket 已連線 [{self.symbol}]")
 
                         async for msg in ws:
@@ -141,6 +154,7 @@ class BinanceFeed:
             except Exception as e:
                 self.state.connected = False
                 self.state.error = str(e)
+                self.set_degraded(f"WebSocket 斷線: {e}")
                 logger.warning(f"⚠️ Binance WebSocket 斷線: {e}，5秒後重連...")
                 await asyncio.sleep(5)
 
@@ -156,18 +170,22 @@ class BinanceFeed:
 
         self.state.last_update = time.time()
 
-        # 觸發更新回調
+        # 向後相容：舊回調
         if self._on_update:
             self._on_update("binance", stream)
 
     def _handle_trade(self, pay: dict):
         """處理交易數據"""
-        self.state.trades.append({
+        trade_data = {
             "t": pay["T"] / 1000.0,
             "price": float(pay["p"]),
             "qty": float(pay["q"]),
             "is_buy": not pay["m"],
-        })
+        }
+        self.state.trades.append(trade_data)
+
+        # 🚌 發佈事件到 MessageBus
+        bus.publish("binance.trade", trade_data, source=self._name)
 
         # 清理過期交易數據
         if len(self.state.trades) > config.TRADE_MAX_BUFFER:
@@ -190,9 +208,17 @@ class BinanceFeed:
         self.state.cur_kline = candle
 
         # K 線收盤時新增到數組
-        if k["x"]:
+        is_closed = k["x"]
+        if is_closed:
             self.state.klines.append(candle)
             self.state.klines = self.state.klines[-config.KLINE_MAX:]
+
+        # 🚌 發佈事件到 MessageBus
+        bus.publish(
+            "binance.kline",
+            {"candle": candle, "closed": is_closed},
+            source=self._name,
+        )
 
     async def _ob_poller(self):
         """訂單簿輪詢器（REST API）"""
@@ -220,6 +246,17 @@ class BinanceFeed:
                             ) / 2
                         self.state.last_update = time.time()
 
+                        # 🚌 發佈事件到 MessageBus
+                        bus.publish(
+                            "binance.orderbook",
+                            {
+                                "mid": self.state.mid,
+                                "bids_count": len(self.state.bids),
+                                "asks_count": len(self.state.asks),
+                            },
+                            source=self._name,
+                        )
+
             except asyncio.CancelledError:
                 break
             except Exception as e:
@@ -244,4 +281,6 @@ class BinanceFeed:
             "trade_count": len(self.state.trades),
             "kline_count": len(all_klines),
             "current_kline": self.state.cur_kline,
+            # Phase 2: 加入元件狀態
+            "component_state": self._state.value,
         }

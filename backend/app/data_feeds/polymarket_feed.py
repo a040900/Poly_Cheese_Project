@@ -1,6 +1,10 @@
 """
 🧀 CheeseDog - Polymarket 數據獲取模組
 透過 Gamma REST API 和 WebSocket 獲取 BTC 15 分鐘市場的數據。
+
+Phase 2 變更：
+- 繼承 Component 基類，具備 ComponentState 生命週期
+- 透過 MessageBus 發佈 polymarket.price 事件
 """
 
 import asyncio
@@ -13,6 +17,8 @@ from datetime import datetime, timezone, timedelta
 import aiohttp
 
 from app import config
+from app.core.state import Component, ComponentState
+from app.core.event_bus import bus
 
 logger = logging.getLogger("cheesedog.feeds.polymarket")
 
@@ -50,17 +56,18 @@ class PolymarketState:
         self.error: Optional[str] = None
 
 
-class PolymarketFeed:
+class PolymarketFeed(Component):
     """Polymarket 數據訂閱管理器"""
 
     def __init__(self):
+        super().__init__("feeds.polymarket")
         self.state = PolymarketState()
         self._running = False
         self._tasks: list[asyncio.Task] = []
         self._on_update: Optional[Callable] = None
 
     def set_update_callback(self, callback: Callable):
-        """設定數據更新回調函數"""
+        """設定數據更新回調函數（向後相容）"""
         self._on_update = callback
 
     async def start(self):
@@ -68,6 +75,7 @@ class PolymarketFeed:
         if self._running:
             return
         self._running = True
+        self.set_ready()
 
         logger.info("🟢 啟動 Polymarket 數據訂閱")
 
@@ -79,6 +87,7 @@ class PolymarketFeed:
             asyncio.create_task(self._ws_feed()),
             asyncio.create_task(self._market_poller()),
         ]
+        self.set_running()
 
     async def stop(self):
         """停止數據訂閱"""
@@ -87,6 +96,7 @@ class PolymarketFeed:
             task.cancel()
         self._tasks.clear()
         self.state.connected = False
+        self.set_stopped()
         logger.info("🔴 Polymarket 數據訂閱已停止")
 
     def _build_slug(self) -> Optional[str]:
@@ -201,6 +211,8 @@ class PolymarketFeed:
                         })
                         self.state.connected = True
                         self.state.error = None
+                        if self._state in (ComponentState.DEGRADED, ComponentState.FAULTED):
+                            self.set_running()
                         logger.info("🔗 Polymarket WebSocket 已連線")
 
                         async for msg in ws:
@@ -217,6 +229,7 @@ class PolymarketFeed:
             except Exception as e:
                 self.state.connected = False
                 self.state.error = str(e)
+                self.set_degraded(f"WebSocket 斷線: {e}")
                 logger.warning(f"⚠️ Polymarket WebSocket 斷線: {e}，5秒後重連...")
                 await asyncio.sleep(5)
 
@@ -243,6 +256,17 @@ class PolymarketFeed:
 
             self.state.last_update = time.time()
 
+            # 🚌 發佈事件到 MessageBus
+            bus.publish(
+                "polymarket.price",
+                {
+                    "up_price": self.state.up_price,
+                    "down_price": self.state.down_price,
+                },
+                source=self._name,
+            )
+
+            # 向後相容：舊回調
             if self._on_update:
                 self._on_update("polymarket", "price_update")
 
@@ -278,4 +302,6 @@ class PolymarketFeed:
             "liquidity": self.state.liquidity,
             "volume": self.state.volume,
             "has_tokens": self.state.up_token_id is not None,
+            # Phase 2: 加入元件狀態
+            "component_state": self._state.value,
         }

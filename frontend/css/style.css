@@ -1107,3 +1107,604 @@ body::before {
         grid-template-columns: 1fr;
     }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Phase 2: 擴充面板 — Tab 系統
+   ═══════════════════════════════════════════════════════════════ */
+.phase2-tabs {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    margin-bottom: 1.25rem;
+    overflow: hidden;
+}
+
+.tab-bar {
+    display: flex;
+    gap: 0;
+    background: var(--bg-elevated);
+    border-bottom: 1px solid var(--border-color);
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.tab-bar::-webkit-scrollbar {
+    display: none;
+}
+
+.tab-btn {
+    padding: 0.72rem 1.25rem;
+    font-family: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    white-space: nowrap;
+}
+
+.tab-btn:hover {
+    color: var(--text-primary);
+    background: var(--bg-card-hover);
+}
+
+.tab-btn.active {
+    color: var(--accent-primary);
+    border-bottom-color: var(--accent-primary);
+    background: var(--bg-card);
+}
+
+.tab-content {
+    display: none;
+    padding: 1.25rem;
+    animation: fadeIn 0.2s ease;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+.panel-footer {
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: flex-end;
+}
+
+/* ── KPI 卡片行 ───────────────────────────────────────────── */
+.perf-kpi-row {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+}
+
+.kpi-card {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 0.85rem 0.75rem;
+    text-align: center;
+    transition: all var(--transition-fast);
+}
+
+.kpi-card:hover {
+    border-color: var(--border-color-hover);
+    transform: translateY(-1px);
+}
+
+.kpi-label {
+    display: block;
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 0.3rem;
+}
+
+.kpi-value {
+    display: block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.kpi-value.kpi-positive {
+    color: var(--color-bullish);
+}
+
+.kpi-value.kpi-negative {
+    color: var(--color-bearish);
+}
+
+/* ── 權益曲線圖表 ─────────────────────────────────────────── */
+.perf-chart-area {
+    margin-bottom: 1rem;
+}
+
+#equity-canvas,
+#bt-equity-canvas {
+    width: 100%;
+    height: 200px;
+    border-radius: var(--radius-md);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+}
+
+/* ── 模式分組統計表 ───────────────────────────────────────── */
+.mode-stats-table {
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+}
+
+.mode-stats-empty {
+    padding: 1.5rem;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.82rem;
+}
+
+.mode-stats-header,
+.mode-stats-row {
+    display: grid;
+    grid-template-columns: 1fr repeat(5, 1fr);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.75rem;
+    align-items: center;
+}
+
+.mode-stats-header {
+    background: var(--bg-elevated);
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.mode-stats-row {
+    border-top: 1px solid var(--border-color);
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 500;
+}
+
+.mode-stats-row:hover {
+    background: var(--bg-card-hover);
+}
+
+/* ── 回測控制面板 ─────────────────────────────────────────── */
+.backtest-controls {
+    margin-bottom: 1.25rem;
+}
+
+.bt-form {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    margin-bottom: 0.75rem;
+}
+
+.bt-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.bt-field label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+.bt-field select,
+.bt-field input[type="number"] {
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.82rem;
+    outline: none;
+    transition: border-color var(--transition-fast);
+    min-width: 120px;
+}
+
+.bt-field select:focus,
+.bt-field input:focus {
+    border-color: var(--accent-primary);
+}
+
+.bt-field input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--accent-primary);
+    margin-bottom: 0.35rem;
+}
+
+.bt-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.bt-status {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem;
+    background: var(--bg-elevated);
+    border-radius: var(--radius-md);
+    color: var(--accent-primary);
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.spinner {
+    width: 20px;
+    height: 20px;
+    border: 2.5px solid var(--border-color);
+    border-top-color: var(--accent-primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.bt-summary {
+    margin-bottom: 1rem;
+}
+
+.bt-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 0.6rem;
+}
+
+.bt-summary-item {
+    background: var(--bg-elevated);
+    padding: 0.6rem 0.75rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+}
+
+.bt-summary-label {
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    display: block;
+}
+
+.bt-summary-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.95rem;
+    font-weight: 700;
+}
+
+/* ── 比較表格 ─────────────────────────────────────────────── */
+.compare-table-grid {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.compare-header,
+.compare-row {
+    display: grid;
+    grid-template-columns: 1fr repeat(6, 1fr);
+    padding: 0.6rem 0.75rem;
+    font-size: 0.78rem;
+    align-items: center;
+}
+
+.compare-header {
+    background: var(--bg-elevated);
+    font-weight: 600;
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+}
+
+.compare-row {
+    border-top: 1px solid var(--border-color);
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.compare-row:hover {
+    background: var(--bg-card-hover);
+}
+
+.compare-row.best {
+    border-left: 3px solid var(--color-bullish);
+    background: rgba(34, 197, 94, 0.04);
+}
+
+/* ── AI 建議面板 ──────────────────────────────────────────── */
+.ai-actions-bar {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+
+.ai-json-display,
+.ai-prompt-display {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 1rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    line-height: 1.6;
+    color: var(--text-secondary);
+    max-height: 320px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin-bottom: 0.75rem;
+}
+
+.prompt-focus-selector {
+    margin-bottom: 0.75rem;
+}
+
+.prompt-focus-selector select {
+    padding: 0.4rem 0.75rem;
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 0.82rem;
+}
+
+.ai-context-area,
+.ai-prompt-area {
+    margin-bottom: 1.25rem;
+}
+
+.advice-empty {
+    padding: 1.5rem;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.82rem;
+}
+
+.advice-card {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 0.85rem 1rem;
+    margin-bottom: 0.5rem;
+    transition: all var(--transition-fast);
+}
+
+.advice-card:hover {
+    border-color: var(--border-color-hover);
+}
+
+.advice-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.4rem;
+}
+
+.advice-action {
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 0.15rem 0.5rem;
+    border-radius: 100px;
+}
+
+.advice-action.SWITCH_MODE {
+    background: rgba(59, 130, 246, 0.15);
+    color: var(--color-info);
+}
+
+.advice-action.CONTINUE {
+    background: rgba(34, 197, 94, 0.15);
+    color: var(--color-bullish);
+}
+
+.advice-action.HOLD {
+    background: rgba(148, 163, 184, 0.15);
+    color: var(--text-muted);
+}
+
+.advice-action.PAUSE_TRADING {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--color-bearish);
+}
+
+.advice-time {
+    font-size: 0.68rem;
+    color: var(--text-muted);
+}
+
+.advice-body {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+.advice-meta {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 0.4rem;
+    font-size: 0.68rem;
+    color: var(--text-muted);
+}
+
+.ai-stats-bar {
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border-color);
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+}
+
+/* ── 元件健康面板 ─────────────────────────────────────────── */
+.health-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+}
+
+.health-card {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 1.25rem;
+    text-align: center;
+    transition: all var(--transition-fast);
+    position: relative;
+    overflow: hidden;
+}
+
+.health-card::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--text-muted);
+    transition: background var(--transition-fast);
+}
+
+.health-card.running::after {
+    background: var(--color-bullish);
+}
+
+.health-card.ready::after {
+    background: var(--color-info);
+}
+
+.health-card.stopped::after {
+    background: var(--color-bearish);
+}
+
+.health-card.degraded::after {
+    background: var(--color-warning);
+}
+
+.health-card.faulted::after {
+    background: var(--color-danger);
+}
+
+.health-card:hover {
+    border-color: var(--border-color-hover);
+    transform: translateY(-2px);
+}
+
+.health-icon {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+}
+
+.health-name {
+    font-size: 0.82rem;
+    font-weight: 600;
+    margin-bottom: 0.3rem;
+}
+
+.health-state {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 0.2rem 0.6rem;
+    border-radius: 100px;
+    display: inline-block;
+}
+
+.health-detail {
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    margin-top: 0.5rem;
+}
+
+/* ── MessageBus 統計 ──────────────────────────────────────── */
+.bus-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.75rem;
+}
+
+.bus-stat {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 0.75rem;
+    text-align: center;
+}
+
+.bus-label {
+    display: block;
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    margin-bottom: 0.25rem;
+}
+
+.bus-value {
+    display: block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+/* ── Phase 2 響應式 ───────────────────────────────────────── */
+@media (max-width: 1200px) {
+    .perf-kpi-row {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    .health-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .perf-kpi-row {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .health-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .bus-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .bt-form {
+        flex-direction: column;
+    }
+
+    .compare-header,
+    .compare-row {
+        grid-template-columns: 1fr repeat(3, 1fr);
+    }
+
+    .tab-btn {
+        padding: 0.6rem 0.8rem;
+        font-size: 0.72rem;
+    }
+}
