@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-TW" data-theme="dark">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,9 +8,12 @@
     <title>🧀 CheeseDog | Polymarket 智慧交易輔助系統</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="static/css/style.css">
 </head>
+
 <body>
     <!-- ═══════════════════════════════════════════════════════ -->
     <!-- 頂部導航列 -->
@@ -92,21 +96,24 @@
                         <svg class="gauge-svg" viewBox="0 0 200 120">
                             <defs>
                                 <linearGradient id="grad-bearish" x1="0%" y1="0%" x2="100%" y2="0%">
-                                    <stop offset="0%" style="stop-color:#ef4444"/>
-                                    <stop offset="100%" style="stop-color:#f97316"/>
+                                    <stop offset="0%" style="stop-color:#ef4444" />
+                                    <stop offset="100%" style="stop-color:#f97316" />
                                 </linearGradient>
                                 <linearGradient id="grad-bullish" x1="0%" y1="0%" x2="100%" y2="0%">
-                                    <stop offset="0%" style="stop-color:#f97316"/>
-                                    <stop offset="100%" style="stop-color:#22c55e"/>
+                                    <stop offset="0%" style="stop-color:#f97316" />
+                                    <stop offset="100%" style="stop-color:#22c55e" />
                                 </linearGradient>
                             </defs>
                             <!-- 背景弧 -->
-                            <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="var(--gauge-bg)" stroke-width="12" stroke-linecap="round"/>
+                            <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="var(--gauge-bg)"
+                                stroke-width="12" stroke-linecap="round" />
                             <!-- 偏差弧 -->
-                            <path id="gauge-arc" d="M 20 100 A 80 80 0 0 1 100 20" fill="none" stroke="url(#grad-bullish)" stroke-width="12" stroke-linecap="round"/>
+                            <path id="gauge-arc" d="M 20 100 A 80 80 0 0 1 100 20" fill="none"
+                                stroke="url(#grad-bullish)" stroke-width="12" stroke-linecap="round" />
                             <!-- 指針 -->
-                            <line id="gauge-needle" x1="100" y1="100" x2="100" y2="30" stroke="var(--text-primary)" stroke-width="2.5" stroke-linecap="round"/>
-                            <circle cx="100" cy="100" r="5" fill="var(--accent-primary)"/>
+                            <line id="gauge-needle" x1="100" y1="100" x2="100" y2="30" stroke="var(--text-primary)"
+                                stroke-width="2.5" stroke-linecap="round" />
+                            <circle cx="100" cy="100" r="5" fill="var(--accent-primary)" />
                             <!-- 分數文字 -->
                             <text id="gauge-text" x="100" y="90" text-anchor="middle" class="gauge-label">0</text>
                         </svg>
@@ -279,9 +286,8 @@
                     請口頭向 AI 說出<strong>「給我密碼」</strong>來獲取驗證密碼。
                 </p>
                 <div class="password-input-group">
-                    <input type="text" id="input-password" class="input-password"
-                           placeholder="輸入 6 位驗證密碼" maxlength="6"
-                           autocomplete="off">
+                    <input type="text" id="input-password" class="input-password" placeholder="輸入 6 位驗證密碼" maxlength="6"
+                        autocomplete="off">
                     <button class="btn btn-primary" id="btn-verify-password">驗證</button>
                 </div>
                 <div class="password-timer" id="password-timer" style="display: none;">
@@ -307,6 +313,7 @@
         </div>
     </footer>
 
-    <script src="/static/js/app.js"></script>
+    <script src="static/js/app.js"></script>
 </body>
+
 </html>

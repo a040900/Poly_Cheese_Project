@@ -9,8 +9,11 @@
     // ═══════════════════════════════════════════════════════════
     // 常數與狀態
     // ═══════════════════════════════════════════════════════════
-    const WS_URL = `ws://${location.host}/ws`;
-    const API_BASE = `http://${location.host}/api`;
+    // 自動偵測子路徑（支援反向代理，如 /polycheese）
+    const basePath = location.pathname.replace(/\/+$/, ''); // 移除尾部 /
+    const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const WS_URL = `${wsProto}//${location.host}${basePath}/ws`;
+    const API_BASE = `${location.protocol}//${location.host}${basePath}/api`;
 
     let ws = null;
     let wsReconnectTimer = null;
