@@ -9,15 +9,15 @@
     // ═══════════════════════════════════════════════════════════
     // 常數與狀態
     // ═══════════════════════════════════════════════════════════
-    // 自動偵測子路徑（支援反向代理，如 /cheesedog）
-    // 優先使用 <base> 標籤中的 href（由伺服器端動態注入），fallback 到 location.pathname
+    // 自動偵測子路徑（支援反向代理，如 /polycheese）
+    // 優先使用 <base> 標籤中的 href（由伺服器端動態注入 main.py:382-386）
     const baseEl = document.querySelector('base');
     let basePath = '';
     if (baseEl && baseEl.getAttribute('href')) {
+        // <base href="/polycheese/"> → basePath = "/polycheese"
         basePath = baseEl.getAttribute('href').replace(/\/+$/, '');
-    } else {
-        basePath = location.pathname.replace(/\/+$/, '');
     }
+    // 如果沒有 <base> 標籤，則假設直接部署（無子路徑）
     const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const WS_URL = `${wsProto}//${location.host}${basePath}/ws`;
     const API_BASE = `${location.protocol}//${location.host}${basePath}/api`;

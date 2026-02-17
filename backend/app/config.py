@@ -18,8 +18,9 @@ APP_NAME = "乳酪のBTC預測室 — Polymarket Intelligent Trading Assistant"
 VERSION = "2.0.0"
 BACKEND_HOST = os.getenv("BACKEND_HOST", "0.0.0.0")
 BACKEND_PORT = int(os.getenv("BACKEND_PORT", "8888"))
-# 反向代理子路徑（如 "/cheesedog"），末尾不含 /，直接部署時留空
-ROOT_PATH = os.getenv("ROOT_PATH", "").rstrip("/")
+# 反向代理子路徑（如 "/polycheese"），末尾不含 /，直接部署時留空
+# VPS Tailscale Serve 部署時設為 "/polycheese"
+ROOT_PATH = os.getenv("ROOT_PATH", "/polycheese").rstrip("/")
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 DATA_DIR = BASE_DIR / "data"
 LOG_DIR = BASE_DIR / "logs"
