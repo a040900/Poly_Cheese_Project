@@ -125,43 +125,63 @@ EMA_LONG = 20
 HA_COUNT = 8                # Heikin Ashi 顯示蠟燭數
 
 # ═══════════════════════════════════════════════════════════════
-# 趨勢偏差評分權重
+# 趨勢偏差評分權重（Phase 3 P1: 真實數據校準 2026-02-18）
 # ═══════════════════════════════════════════════════════════════
 # 每個指標對最終綜合趨勢分數的最大貢獻度
+# 校準方法: Random Search (200) + Hill Climbing (100)
+# 校準數據: Binance BTCUSDT 1m K 線 16h (931 筆真實快照)
+# 校準結果: Composite=0.725 | Sharpe=103.18 | 勝率=70.6% | 17 筆交易
 BIAS_WEIGHTS = {
-    "ema":   10,   # EMA5/EMA20 交叉 - 最強趨勢代理
-    "obi":    8,   # 訂單簿失衡
-    "macd":   8,   # MACD 直方圖方向
-    "cvd":    7,   # CVD 5 分鐘方向
-    "ha":     6,   # Heikin-Ashi 連續方向（最多 3 根蠟燭）
-    "vwap":   5,   # 價格 vs VWAP
-    "rsi":    5,   # RSI 超買/超賣
-    "bb":     5,   # Bollinger Band %B (Phase 3: 波動率維度)
-    "poc":    3,   # 價格 vs POC (成交量集中點)
-    "walls":  4,   # 買牆 − 賣牆（限制 ±4）
+    "ema":    6,   # EMA 交叉（連續函數）
+    "obi":    4,   # 訂單簿失衡
+    "macd":   3,   # MACD Histogram（幅度化）
+    "cvd":    5,   # CVD 5 分鐘方向
+    "ha":    12,   # Heikin-Ashi 連續方向 ★ 校準 MVP
+    "vwap":   7,   # 價格 vs VWAP
+    "rsi":    5,   # RSI 超買/超賣（極端加強）
+    "bb":     8,   # Bollinger Band %B（波動率維度）★ 校準重要
+    "poc":    3,   # 價格 vs POC（成交量集中點）
+    "walls":  1,   # 買牆 − 賣牆
 }
-# 權重總和 = 61；偏差分數 = (原始總和 / 61) * 100，夾緊在 ±100
+# 權重總和 = 54；偏差分數 = (原始總和 / 54) * 100，夾緊在 ±100
 
 # ═══════════════════════════════════════════════════════════════
-# 交易模式定義
+# 交易模式定義（Phase 3 P1: 5 級連續光譜）
 # ═══════════════════════════════════════════════════════════════
+# 等級排列: defensive < conservative < balanced < aggressive < ultra_aggressive
+# Agent 可根據市場狀態（MARKET_REGIME）自動選擇最適合的模式
 TRADING_MODES = {
+    "ultra_aggressive": {
+        "name": "超激進 (Ultra Aggressive)",
+        "description": "極短線趨勢追蹤，高頻交易，需要極強趨勢才有利",
+        "signal_threshold": 15,      # 極低門檻，幾乎見信號就進
+        "max_position_pct": 0.40,    # 單筆最大倉位 40%
+        "stop_loss_pct": 0.20,       # 寬止損
+        "take_profit_pct": 0.25,     # 高止盈
+        "indicator_weights_multiplier": {
+            "ema": 1.5, "obi": 0.8, "macd": 0.6,
+            "cvd": 1.5, "ha": 0.4, "vwap": 0.5,
+            "rsi": 0.3, "bb": 0.4, "poc": 0.3, "walls": 1.2,
+        },
+        "regime_affinity": ["strong_trend"],  # 適合的市場狀態
+    },
     "aggressive": {
         "name": "積極 (Aggressive)",
-        "description": "高風險高回報，使用較少指標確認，快速進場",
-        "signal_threshold": 25,      # 觸發交易的最低趨勢分數
-        "max_position_pct": 0.30,    # 單筆最大倉位百分比（占總資金）
-        "stop_loss_pct": 0.15,       # 止損百分比
-        "take_profit_pct": 0.20,     # 止盈百分比
+        "description": "高風險高回報，快速進場，適合趨勢市",
+        "signal_threshold": 25,
+        "max_position_pct": 0.30,
+        "stop_loss_pct": 0.15,
+        "take_profit_pct": 0.20,
         "indicator_weights_multiplier": {
-            "ema": 1.2, "obi": 1.0, "macd": 0.8,
-            "cvd": 1.2, "ha": 0.6, "vwap": 0.8,
-            "rsi": 0.6, "bb": 0.6, "poc": 0.5, "walls": 1.0,
+            "ema": 1.2, "obi": 0.9, "macd": 0.8,
+            "cvd": 1.2, "ha": 0.7, "vwap": 0.8,
+            "rsi": 0.5, "bb": 0.6, "poc": 0.5, "walls": 1.0,
         },
+        "regime_affinity": ["strong_trend", "mild_trend"],
     },
     "balanced": {
         "name": "平衡 (Balanced)",
-        "description": "風險與回報平衡，使用全部指標綜合判斷",
+        "description": "風險與回報平衡，全指標綜合判斷，適合多數行情",
         "signal_threshold": 40,
         "max_position_pct": 0.20,
         "stop_loss_pct": 0.10,
@@ -171,20 +191,98 @@ TRADING_MODES = {
             "cvd": 1.0, "ha": 1.0, "vwap": 1.0,
             "rsi": 1.0, "bb": 1.0, "poc": 1.0, "walls": 1.0,
         },
+        "regime_affinity": ["mild_trend", "ranging"],
     },
     "conservative": {
         "name": "保守 (Conservative)",
-        "description": "低風險穩健策略，需要更多指標確認方進場",
-        "signal_threshold": 60,
-        "max_position_pct": 0.10,
-        "stop_loss_pct": 0.05,
-        "take_profit_pct": 0.10,
+        "description": "低風險穩健策略，需更多確認，適合震盪市",
+        "signal_threshold": 55,
+        "max_position_pct": 0.12,
+        "stop_loss_pct": 0.07,
+        "take_profit_pct": 0.12,
         "indicator_weights_multiplier": {
             "ema": 0.8, "obi": 1.2, "macd": 1.2,
             "cvd": 0.8, "ha": 1.2, "vwap": 1.2,
-            "rsi": 1.5, "bb": 1.3, "poc": 1.0, "walls": 1.2,
+            "rsi": 1.4, "bb": 1.3, "poc": 1.0, "walls": 1.2,
         },
+        "regime_affinity": ["ranging", "choppy"],
     },
+    "defensive": {
+        "name": "防禦 (Defensive)",
+        "description": "極保守策略，僅在極強信號進場，適合高波動/不確定市場",
+        "signal_threshold": 70,
+        "max_position_pct": 0.08,
+        "stop_loss_pct": 0.04,
+        "take_profit_pct": 0.08,
+        "indicator_weights_multiplier": {
+            "ema": 0.6, "obi": 1.5, "macd": 1.5,
+            "cvd": 0.6, "ha": 1.5, "vwap": 1.5,
+            "rsi": 1.8, "bb": 1.6, "poc": 1.2, "walls": 1.5,
+        },
+        "regime_affinity": ["choppy", "crash"],
+    },
+}
+
+# ═══════════════════════════════════════════════════════════════
+# 市場狀態自動偵測（Market Regime Detection）
+# ═══════════════════════════════════════════════════════════════
+# Agent 使用這些參數判斷當前市場狀態，自動選擇最適合的交易模式
+MARKET_REGIME_CONFIG = {
+    # 波動率閾值（基於 ATR 或 BB 寬度的百分比）
+    "volatility_low": 0.3,     # < 0.3% → 低波動（盤整）
+    "volatility_mid": 0.8,     # 0.3~0.8% → 中波動（正常）
+    "volatility_high": 1.5,    # 0.8~1.5% → 高波動（趨勢）
+    # > 1.5% → 極高波動（崩盤/暴漲）
+
+    # 趨勢強度閾值（基於 ADX 或 EMA 斜率）
+    "trend_weak": 15,          # ADX < 15 → 無趨勢
+    "trend_mild": 25,          # 15~25 → 溫和趨勢
+    "trend_strong": 40,        # > 25 → 強趨勢
+
+    # 市場狀態 → 推薦模式映射
+    "regime_mode_map": {
+        "strong_trend": "aggressive",
+        "mild_trend":   "balanced",
+        "ranging":      "conservative",
+        "choppy":       "defensive",
+        "crash":        "defensive",
+    },
+
+    # 自動切換冷卻期（秒）— 避免頻繁切換模式
+    "mode_switch_cooldown": 300,  # 5 分鐘
+}
+
+# ═══════════════════════════════════════════════════════════════
+# Phase 3 P2: 風險管理設定 (Risk Management)
+# ═══════════════════════════════════════════════════════════════
+RISK_MANAGEMENT = {
+    # ── Kelly Criterion 設定 ──────────────────────────────────
+    "kelly_fraction": 0.5,         # Half-Kelly（更保守，降低破產風險）
+    # Full-Kelly = 1.0（理論最優但波動極大）
+    # Quarter-Kelly = 0.25（極保守）
+
+    # ── 倉位比例限制 ──────────────────────────────────────────
+    "min_position_pct": 0.02,      # 最小倉位 2%（避免交易太小沒意義）
+    "max_position_pct": 0.35,      # 最大倉位 35%（全局硬上限）
+
+    # ── Circuit Breaker 1: 日虧損上限 ─────────────────────────
+    "daily_loss_limit_enabled": True,
+    "daily_loss_limit_pct": 10.0,  # 日虧損超過 10% 觸發熔斷
+
+    # ── Circuit Breaker 2: 連敗上限 ───────────────────────────
+    "consecutive_loss_limit_enabled": True,
+    "consecutive_loss_limit": 5,   # 連續虧損 5 筆觸發熔斷
+
+    # ── Circuit Breaker 3: 最大回撤 ───────────────────────────
+    "max_drawdown_limit_enabled": True,
+    "max_drawdown_limit_pct": 20.0,  # 回撤超過 20% 觸發熔斷
+
+    # ── Circuit Breaker 4: 日交易次數上限 ─────────────────────
+    "daily_trade_limit_enabled": True,
+    "daily_trade_limit": 30,       # 每日最多 30 筆交易
+
+    # ── 熔斷冷卻時間 ──────────────────────────────────────────
+    "circuit_breaker_cooldown": 1800,  # 熔斷後冷卻 30 分鐘
 }
 
 # ═══════════════════════════════════════════════════════════════

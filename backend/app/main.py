@@ -35,6 +35,7 @@ from app.performance.tracker import PerformanceTracker
 from app.performance.backtester import run_backtest, run_mode_comparison
 from app.llm.prompt_builder import prompt_builder
 from app.llm.advisor import llm_advisor
+from app.trading.risk_manager import risk_manager
 
 # ═══════════════════════════════════════════════════════════════
 # 日誌設定
@@ -779,6 +780,16 @@ async def get_bus_stats():
         "queue_size": stats.get("queue_size", 0),
         "subscriber_count": stats.get("subscriber_count", {}),
     }
+
+
+# ═══════════════════════════════════════════════════════════════
+# Phase 3 P2: 風險管理 API
+# ═══════════════════════════════════════════════════════════════
+
+@app.get("/api/risk")
+async def get_risk_status():
+    """取得風險管理狀態（Kelly Criterion + Circuit Breakers）"""
+    return risk_manager.get_status()
 
 
 # ═══════════════════════════════════════════════════════════════

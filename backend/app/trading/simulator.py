@@ -10,6 +10,7 @@ from typing import Optional, Dict, List
 from app import config
 from app.database import db
 from app.strategy.fees import fee_model
+from app.trading.risk_manager import risk_manager
 
 logger = logging.getLogger("cheesedog.trading.simulator")
 
@@ -26,6 +27,7 @@ class SimulationTrade:
         signal_score: float,
         trading_mode: str,
         market_title: Optional[str] = None,
+        contract_price: float = 0.5,
     ):
         self.trade_id = trade_id
         self.direction = direction       # "BUY_UP" 或 "SELL_DOWN"
@@ -33,7 +35,8 @@ class SimulationTrade:
         self.quantity = quantity          # USDC 金額
         self.signal_score = signal_score
         self.trading_mode = trading_mode
-        self.market_title = market_title  # Polymarket 市場標題（例如：Bitcoin Up or Down - February 17, 1:30PM-1:45PM ET）
+        self.market_title = market_title  # Polymarket 市場標題
+        self.contract_price = contract_price  # 開倉時合約價格（用於結算回報率計算）
         self.entry_time = time.time()
         self.exit_price: Optional[float] = None
         self.exit_time: Optional[float] = None
@@ -72,13 +75,15 @@ class SimulationEngine:
         self,
         signal: dict,
         amount: Optional[float] = None,
+        pm_state: Optional[object] = None,
     ) -> Optional[SimulationTrade]:
         """
-        執行模擬交易
+        執行模擬交易（Phase 2.1: 含利潤過濾器）
 
         Args:
             signal: 交易信號
             amount: 交易金額（None 則使用風險評估建議金額）
+            pm_state: Polymarket 狀態物件（含 bid/ask/spread）
 
         Returns:
             SimulationTrade 物件或 None
@@ -91,35 +96,121 @@ class SimulationEngine:
         if direction == "NEUTRAL":
             return None
 
-        # 確定交易金額
+        # ── 取得實際合約價格 ──────────────────────────────────
+        contract_price = 0.5  # 預設候補值
+        spread = None
+        if pm_state is not None:
+            if direction == "BUY_UP" and pm_state.up_price:
+                contract_price = pm_state.up_price
+                spread = pm_state.up_spread
+            elif direction == "SELL_DOWN" and pm_state.down_price:
+                contract_price = pm_state.down_price
+                spread = pm_state.down_spread
+
+        # 確定交易金額（Phase 3 P2: 使用 RiskManager 動態計算）
         if amount is None:
             mode_config = config.TRADING_MODES.get(
                 signal.get("mode", "balanced"),
                 config.TRADING_MODES["balanced"]
             )
             confidence = signal.get("confidence", 50)
-            amount = self.balance * mode_config["max_position_pct"] * (confidence / 100)
+
+            # 使用 RiskManager 計算最優倉位
+            sizing = risk_manager.calculate_position_size(
+                balance=self.balance,
+                signal_confidence=confidence,
+                trading_mode=signal.get("mode", "balanced"),
+                contract_price=contract_price,
+            )
+
+            # 熔斷檢查
+            if sizing.circuit_breaker_active:
+                logger.warning(
+                    f"🔴 熔斷攔截！ | 原因: {sizing.circuit_breaker_reason}"
+                )
+                return None
+
+            amount = sizing.recommended_amount
+
+            # 記錄風險管理決策詳情
+            logger.debug(
+                f"📐 RiskManager 建議 | Kelly={sizing.kelly_fraction:.3f} | "
+                f"倉位={sizing.position_pct:.3f} | 風險={sizing.risk_score:.0f} | "
+                f"金額=${amount:.2f}"
+            )
 
         # 檢查餘額
         if amount <= 0 or amount > self.balance:
             logger.warning(f"資金不足: 需要 ${amount:.2f}, 可用 ${self.balance:.2f}")
             return None
 
-        # 計算手續費（Phase 2: 使用 Polymarket 浮動費率）
-        # BUY_UP 方向 = 買入 UP 合約，SELL_DOWN 方向 = 買入 DOWN 合約
-        # 兩者在開倉時都是 "buy" 操作
-        fee_result = fee_model.calculate_buy_fee(amount, contract_price=0.5)
+        # 檢查最低交易金額
+        if amount < config.PROFIT_FILTER_MIN_TRADE_AMOUNT:
+            logger.debug(f"交易金額太小: ${amount:.2f} < 最低 ${config.PROFIT_FILTER_MIN_TRADE_AMOUNT:.2f}")
+            return None
+
+        # ═══ Phase 2.1: 利潤過濾器 (Profit Filter) ════════════════
+        if config.PROFIT_FILTER_ENABLED:
+
+            # ── 1. Spread 檢查：價差太大代表流動性差，進去就是被宰 ──
+            if spread is not None and spread > config.PROFIT_FILTER_MAX_SPREAD_PCT:
+                logger.info(
+                    f"⛔ 利潤過濾器攔截 [SPREAD] | 方向: {direction} | "
+                    f"Spread: {spread*100:.2f}% > 上限 {config.PROFIT_FILTER_MAX_SPREAD_PCT*100:.1f}% | "
+                    f"原因: 流動性不足，進場即虧損"
+                )
+                return None
+
+            # ── 2. 預期利潤 vs 手續費檢查 ────────────────────
+            # Polymarket 二元選擇權：勝利回報 = (1 / contract_price - 1)
+            # 例如 contract_price=0.55，勝利毛利 = 81.8%
+            if contract_price > 0 and contract_price < 1:
+                expected_return_rate = (1.0 / contract_price) - 1.0
+                expected_gross_profit = expected_return_rate * amount
+
+                # 估算來回手續費總成本
+                round_trip = fee_model.estimate_round_trip_cost(
+                    amount,
+                    buy_price=contract_price,
+                    sell_price=contract_price,
+                )
+                total_fee = round_trip["total_fee"]
+                min_required = total_fee * config.PROFIT_FILTER_MIN_PROFIT_RATIO
+
+                if expected_gross_profit < min_required:
+                    logger.info(
+                        f"⛔ 利潤過濾器攔截 [FEE] | 方向: {direction} | "
+                        f"合約價: {contract_price:.4f} | "
+                        f"預期毛利: ${expected_gross_profit:.4f} < "
+                        f"最低要求: ${min_required:.4f} "
+                        f"(手續費 ${total_fee:.4f} × {config.PROFIT_FILTER_MIN_PROFIT_RATIO})"
+                    )
+                    return None
+
+                logger.debug(
+                    f"✅ 利潤過濾器通過 | 方向: {direction} | "
+                    f"合約價: {contract_price:.4f} | "
+                    f"預期回報率: {expected_return_rate*100:.1f}% | "
+                    f"預期毛利: ${expected_gross_profit:.4f} vs 手續費: ${total_fee:.4f}"
+                )
+
+        # ═══ 計算開倉手續費（使用實際合約價格）══════════════
+        fee_result = fee_model.calculate_buy_fee(amount, contract_price=contract_price)
         fee = fee_result.fee_amount
 
-        # 取得 Polymarket 市場標題
-        market_title = signal.get("market_title", "BTC 15m UP/DOWN")
+        # 取得 Polymarket 市場標題 (優先從 pm_state 獲取)
+        market_title = "BTC 15m UP/DOWN"
+        if pm_state and hasattr(pm_state, "market_title") and pm_state.market_title:
+            market_title = pm_state.market_title
+        elif signal.get("market_title"):
+            market_title = signal.get("market_title")
 
         # 記錄到資料庫
         trade_data = {
             "trade_type": "simulation",
             "direction": direction,
             "entry_time": time.time(),
-            "entry_price": signal.get("score", 0),
+            "entry_price": contract_price,  # 使用實際合約價格
             "quantity": amount,
             "fee": fee,
             "fee_rate": fee_result.fee_rate,
@@ -132,7 +223,10 @@ class SimulationEngine:
                 "fee_model": "polymarket_15m",
                 "fee_side": "buy",
                 "fee_deducted_in": fee_result.fee_deducted_in,
-                "market_title": market_title,  # 記錄市場標題
+                "market_title": market_title,
+                "contract_price": contract_price,
+                "spread": spread,
+                "profit_filter": "passed" if config.PROFIT_FILTER_ENABLED else "disabled",
             },
         }
         trade_id = db.save_trade(trade_data)
@@ -141,11 +235,12 @@ class SimulationEngine:
         trade = SimulationTrade(
             trade_id=trade_id,
             direction=direction,
-            entry_price=signal.get("score", 0),
+            entry_price=contract_price,
             quantity=amount,
             signal_score=signal.get("score", 0),
             trading_mode=signal.get("mode", "balanced"),
-            market_title=market_title,  # 傳遞市場標題
+            market_title=market_title,
+            contract_price=contract_price,
         )
 
         # 扣除資金和手續費
@@ -153,9 +248,13 @@ class SimulationEngine:
         self.open_trades.append(trade)
         self.total_trades += 1
 
+        # Phase 3 P2: 通知風險管理器
+        risk_manager.on_trade_opened(amount, self.balance)
+
         logger.info(
             f"📈 模擬交易開倉 | 方向: {direction} | "
             f"市場: {market_title} | "
+            f"合約價: {contract_price:.4f} | "
             f"金額: ${amount:.2f} | 手續費: ${fee:.4f} | "
             f"剩餘: ${self.balance:.2f}"
         )
@@ -188,16 +287,30 @@ class SimulationEngine:
         else:  # SELL_DOWN
             won = market_result == "DOWN"
 
-        # 計算盈虧（Phase 2: 含 Sell 端手續費）
-        # Polymarket: 勝利 = 獲得約 (1/price - 1) * quantity 的利潤
-        # 結算時賣出（或贖回），需扣除 Sell 端手續費
+        # 計算盈虧（Phase 2.1: 使用實際合約價格計算回報率）
+        # Polymarket 二元選擇權：
+        #   勝利 = 獲得 (1 / contract_price - 1) * quantity 的利潤
+        #   例如 contract_price = 0.55 → 回報率 = 81.8%
+        #   例如 contract_price = 0.40 → 回報率 = 150.0%
         if won:
-            gross_profit = trade.quantity * 0.85  # 模擬回報率約 85%
+            cp = trade.contract_price if trade.contract_price > 0 else 0.5
+            return_rate = (1.0 / cp) - 1.0
+            gross_profit = trade.quantity * return_rate
+
+            # 結算時賣出（或贖回），需扣除 Sell 端手續費
             sell_fee = fee_model.calculate_sell_fee(
-                trade.quantity + gross_profit, contract_price=0.5
+                trade.quantity + gross_profit, contract_price=cp
             )
             trade.pnl = gross_profit - sell_fee.fee_amount
             self.balance += trade.quantity + trade.pnl
+
+            logger.debug(
+                f"結算計算 | 合約價: {cp:.4f} | "
+                f"回報率: {return_rate*100:.1f}% | "
+                f"毛利: ${gross_profit:.4f} | "
+                f"Sell手續費: ${sell_fee.fee_amount:.4f} | "
+                f"淨利: ${trade.pnl:.4f}"
+            )
         else:
             trade.pnl = -trade.quantity
             # 資金已扣除，無需額外操作
@@ -213,6 +326,13 @@ class SimulationEngine:
             "status": "closed",
         })
 
+        # Phase 3 P2: 通知風險管理器
+        risk_manager.on_trade_closed(
+            pnl=trade.pnl,
+            balance=self.balance,
+            won=won,
+        )
+
         # 從未平倉列表移除
         self.open_trades = [t for t in self.open_trades if t.trade_id != trade.trade_id]
 
@@ -225,11 +345,14 @@ class SimulationEngine:
             "won": won,
             "entry_time": trade.entry_time,
             "exit_time": trade.exit_time,
+            "contract_price": trade.contract_price,
+            "market_title": trade.market_title,  # 確保平倉後保留市場標題
         })
 
         result_emoji = "✅" if won else "❌"
         logger.info(
             f"{result_emoji} 模擬交易結算 | 方向: {trade.direction} | "
+            f"合約價: {trade.contract_price:.4f} | "
             f"金額: ${trade.quantity:.2f} | 盈虧: ${trade.pnl:+.2f} | "
             f"餘額: ${self.balance:.2f}"
         )
