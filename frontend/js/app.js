@@ -150,6 +150,7 @@
         renderSignal(data.signal);
         renderIndicators(data.indicators);
         renderTrading(data.trading);
+        renderLatestAdvice(data.latest_advice);
     }
 
     function renderConnections(conn) {
@@ -181,6 +182,33 @@
         setTextContent('val-pm-market', market.pm_market_title || '--');
         setTextContent('val-pm-liquidity',
             market.pm_liquidity ? `流動性: $${formatNumber(market.pm_liquidity, 0)}` : '--');
+
+        // Spread 顯示
+        updateSpreadBadge('val-pm-up-spread', market.pm_up_spread);
+        updateSpreadBadge('val-pm-down-spread', market.pm_down_spread);
+    }
+
+    function updateSpreadBadge(elementId, spread) {
+        const el = document.getElementById(elementId);
+        if (!el) return;
+
+        if (spread == null || spread === undefined) {
+            el.textContent = '';
+            el.className = 'spread-badge';
+            return;
+        }
+
+        const pct = (spread * 100).toFixed(2);
+        el.textContent = `價差 ${pct}%`;
+
+        // 顏色分級：≤ 1% 綠色 (good)、≤ 2% 黃色 (warn)、> 2% 紅色 (bad)
+        if (spread <= 0.01) {
+            el.className = 'spread-badge spread-good';
+        } else if (spread <= 0.02) {
+            el.className = 'spread-badge spread-warn';
+        } else {
+            el.className = 'spread-badge spread-bad';
+        }
     }
 
     function renderSignal(signal) {
@@ -322,6 +350,55 @@
         }
     }
 
+    // ═══════════════════════════════════════════════════════════
+    // AI 建議即時更新（主畫面底部控制列）
+    // ═══════════════════════════════════════════════════════════
+    function renderLatestAdvice(advice) {
+        const container = document.getElementById('advice-content');
+        if (!container) return;
+
+        // 沒有建議：顯示預設文字
+        if (!advice) {
+            container.innerHTML = '<span class="advice-text">系統就緒，等待 AI 代理提供分析建議...</span>';
+            return;
+        }
+
+        // 行動圖示對應
+        const actionIcons = {
+            'HOLD': '⏸️',
+            'SWITCH_MODE': '🔄',
+            'PAUSE_TRADING': '⛔',
+            'CONTINUE': '✅',
+        };
+
+        const action = advice.advice_type || 'HOLD';
+        const icon = actionIcons[action] || '💡';
+        const mode = advice.recommended_mode || '--';
+        const reasoning = advice.reasoning || '無詳細說明';
+        const ctx = advice.market_context || {};
+        const confidence = ctx.confidence || 0;
+        const riskLevel = ctx.risk_level || '--';
+        const appliedTag = advice.applied ? '✅ 已套用' : '⏳ 待套用';
+
+        // 時間格式
+        let timeStr = '';
+        if (advice.timestamp) {
+            const d = new Date(advice.timestamp * 1000);
+            timeStr = d.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+        }
+
+        container.innerHTML = `
+            <div class="advice-live">
+                <span class="advice-icon">${icon}</span>
+                <span class="advice-text">${reasoning}</span>
+                <span class="advice-meta-inline">
+                    ${mode} · 信心 ${confidence}% · 風險 ${riskLevel} · ${appliedTag}
+                    ${timeStr ? ' · ' + timeStr : ''}
+                </span>
+            </div>
+        `;
+    }
+
     function renderRecentTrades(trades) {
         const tbody = document.getElementById('trades-body');
         if (!tbody) return;
@@ -334,6 +411,16 @@
         const rows = trades.map(t => {
             const dirLabel = t.direction === 'BUY_UP' ? '📈 看漲' : '📉 看跌';
             const dirClass = t.direction === 'BUY_UP' ? 'bullish' : 'bearish';
+
+            // 市場標題（截取簡短名稱）
+            let marketLabel = t.market_title || 'BTC 15m';
+            // 安全截取 " - " 之後的時間部分
+            if (typeof marketLabel === 'string' && marketLabel.includes(' - ')) {
+                const parts = marketLabel.split(' - ');
+                if (parts.length > 1) {
+                    marketLabel = parts[parts.length - 1]; // 取最後一段
+                }
+            }
 
             let statusLabel, statusClass, pnlText;
 
@@ -351,6 +438,7 @@
 
             return `<div class="trade-row ${statusClass}">
                 <span class="trade-dir ${dirClass}">${dirLabel}</span>
+                <span class="trade-market" title="${t.market_title || ''}">${marketLabel}</span>
                 <span class="trade-qty">$${formatNumber(t.quantity, 2)}</span>
                 <span class="trade-pnl ${t.pnl >= 0 ? 'positive' : 'negative'}">${pnlText}</span>
                 <span class="trade-status ${statusClass}">${statusLabel}</span>

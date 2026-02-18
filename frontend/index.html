@@ -67,12 +67,18 @@
             <div class="metric-card metric-pm-up" id="card-pm-up">
                 <div class="metric-label">Polymarket 看漲 ↑</div>
                 <div class="metric-value" id="val-pm-up">--</div>
-                <div class="metric-sub" id="val-pm-market">--</div>
+                <div class="metric-sub">
+                    <span id="val-pm-market">--</span>
+                    <span class="spread-badge" id="val-pm-up-spread" title="UP 合約 Bid/Ask 價差"></span>
+                </div>
             </div>
             <div class="metric-card metric-pm-down" id="card-pm-down">
                 <div class="metric-label">Polymarket 看跌 ↓</div>
                 <div class="metric-value" id="val-pm-down">--</div>
-                <div class="metric-sub" id="val-pm-liquidity">--</div>
+                <div class="metric-sub">
+                    <span id="val-pm-liquidity">--</span>
+                    <span class="spread-badge" id="val-pm-down-spread" title="DOWN 合約 Bid/Ask 價差"></span>
+                </div>
             </div>
             <div class="metric-card metric-signal" id="card-signal">
                 <div class="metric-label">當前信號</div>
@@ -220,6 +226,7 @@
                         <div class="trades-table" id="trades-table">
                             <div class="trade-header">
                                 <span>方向</span>
+                                <span>市場</span>
                                 <span>金額</span>
                                 <span>盈虧</span>
                                 <span>狀態</span>
@@ -297,9 +304,11 @@
                         <div class="bt-field">
                             <label>交易模式</label>
                             <select id="bt-mode">
-                                <option value="balanced">⚖️ 平衡</option>
+                                <option value="ultra_aggressive">⚡ 超激進</option>
                                 <option value="aggressive">🔥 積極</option>
+                                <option value="balanced" selected>⚖️ 平衡</option>
                                 <option value="conservative">🛡️ 保守</option>
+                                <option value="defensive">🏰 防禦</option>
                             </select>
                         </div>
                         <div class="bt-field">
@@ -317,7 +326,7 @@
                     </div>
                     <div class="bt-actions">
                         <button class="btn btn-primary btn-sm" id="btn-run-backtest">▶ 執行回測</button>
-                        <button class="btn btn-outline btn-sm" id="btn-run-compare">📊 三模式比較</button>
+                        <button class="btn btn-outline btn-sm" id="btn-run-compare">📊 五模式比較</button>
                     </div>
                 </div>
 
@@ -335,7 +344,7 @@
                 </div>
 
                 <div class="bt-compare-results" id="bt-compare-results" style="display:none;">
-                    <h3 class="chart-title">📊 三模式比較</h3>
+                    <h3 class="chart-title">📊 五模式比較</h3>
                     <div class="compare-table" id="compare-table"></div>
                 </div>
             </div>
@@ -425,6 +434,9 @@
             <div class="control-group">
                 <label class="control-label">交易模式</label>
                 <div class="mode-selector" id="mode-selector">
+                    <button class="mode-btn" data-mode="ultra_aggressive" id="mode-ultra-aggressive">
+                        ⚡ 超激進
+                    </button>
                     <button class="mode-btn" data-mode="aggressive" id="mode-aggressive">
                         🔥 積極
                     </button>
@@ -433,6 +445,9 @@
                     </button>
                     <button class="mode-btn" data-mode="conservative" id="mode-conservative">
                         🛡️ 保守
+                    </button>
+                    <button class="mode-btn" data-mode="defensive" id="mode-defensive">
+                        🏰 防禦
                     </button>
                 </div>
             </div>
@@ -494,7 +509,7 @@
             <span id="footer-time">--</span>
         </div>
         <div class="footer-right">
-            <span>v2.0.0</span>
+            <span>v3.1.0</span>
         </div>
     </footer>
 

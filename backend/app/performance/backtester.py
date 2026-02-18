@@ -39,8 +39,9 @@ class BacktestConfig:
     max_open_trades: int = 1           # 同時最多持倉數
     settlement_seconds: float = 900.0  # 結算時間 (15 分鐘)
     use_fees: bool = True              # 是否計算手續費
-    contract_price: float = 0.50       # 模擬合約價格 (用於手續費計算)
-    win_payout_rate: float = 0.85      # 勝利回報率 (模擬)
+    use_profit_filter: bool = True     # 是否啟用利潤過濾器
+    use_saved_signals: bool = True     # 是否使用快照中保存的信號分數（校準時設為 False）
+    disable_cooldown: bool = False     # 是否禁用信號冷卻期（校準時設為 True）
 
 
 @dataclass
@@ -54,6 +55,7 @@ class BacktestTrade:
     entry_time: float
     trading_mode: str
     signal_score: float
+    contract_price: float = 0.5   # Polymarket 合約價格
 
 
 class Backtester:
@@ -130,14 +132,20 @@ class Backtester:
             self._settle_expired(ts, prev_btc_price, btc_price)
 
             # ── 建構模擬 K 線 ────────────────────────────────
-            # 每個快照當作一根 1 分鐘 K 線
+            # 使用相鄰快照價差來建構更合理的 OHLCV
+            if prev_btc_price > 0:
+                price_change = abs(btc_price - prev_btc_price)
+                volatility = max(price_change * 1.5, btc_price * 0.0005)
+            else:
+                volatility = btc_price * 0.0005
+
             simulated_kline = {
                 "t": ts,
-                "o": btc_price,
-                "h": btc_price * 1.0001,  # 微小波動模擬
-                "l": btc_price * 0.9999,
+                "o": prev_btc_price if prev_btc_price > 0 else btc_price,
+                "h": max(btc_price, prev_btc_price if prev_btc_price > 0 else btc_price) + volatility * 0.5,
+                "l": min(btc_price, prev_btc_price if prev_btc_price > 0 else btc_price) - volatility * 0.5,
                 "c": btc_price,
-                "v": 100.0,  # 假設成交量
+                "v": 100.0 + price_change * 10 if prev_btc_price > 0 else 100.0,
             }
             kline_window.append(simulated_kline)
             kline_window = kline_window[-config.KLINE_MAX:]
@@ -156,24 +164,34 @@ class Backtester:
 
             # ── 生成信號 ──────────────────────────────────────
             # 使用空 bids/asks 和 trades（回測中無訂單簿數據）
+            # 校準模式下禁用冷卻期，讓信號更頻繁
+            if self.config.disable_cooldown:
+                self._signal_gen._last_buy_time = 0.0
+                self._signal_gen._last_sell_time = 0.0
+
             signal = self._signal_gen.generate_signal(
                 bids=[], asks=[], mid=btc_price,
                 trades=[], klines=kline_window,
             )
 
             # 如果快照有保存的指標分數，可以優先使用
-            saved_score = snap.get("bias_score")
-            saved_direction = snap.get("signal")
-            if saved_score is not None and saved_direction:
-                signal["score"] = saved_score
-                signal["direction"] = saved_direction
+            # （校準模式下禁用此功能，以測試不同權重的效果）
+            if self.config.use_saved_signals:
+                saved_score = snap.get("bias_score")
+                saved_direction = snap.get("signal")
+                if saved_score is not None and saved_direction:
+                    signal["score"] = saved_score
+                    signal["direction"] = saved_direction
 
             # ── 交易邏輯 ──────────────────────────────────────
             if signal["direction"] != "NEUTRAL" and len(self._open_trades) < self.config.max_open_trades:
                 # 檢查是否已有同方向持倉
                 has_same = any(t.direction == signal["direction"] for t in self._open_trades)
                 if not has_same:
-                    self._open_trade(signal, btc_price, ts)
+                    # 從快照中取得 Polymarket 合約價格
+                    pm_up = snap.get("pm_up_price")
+                    pm_down = snap.get("pm_down_price")
+                    self._open_trade(signal, btc_price, ts, pm_up, pm_down)
 
             prev_btc_price = btc_price
 
@@ -223,8 +241,9 @@ class Backtester:
             logger.error(f"❌ 載入歷史快照失敗: {e}")
             return []
 
-    def _open_trade(self, signal: dict, btc_price: float, ts: float):
-        """開倉"""
+    def _open_trade(self, signal: dict, btc_price: float, ts: float,
+                    pm_up: float = None, pm_down: float = None):
+        """開倉（Phase 2.1: 含利潤過濾器）"""
         mode_config = config.TRADING_MODES.get(
             self.config.trading_mode,
             config.TRADING_MODES["balanced"],
@@ -235,10 +254,31 @@ class Backtester:
         if amount <= 0 or amount > self._balance:
             return
 
+        # 確定合約價格
+        direction = signal["direction"]
+        contract_price = 0.5  # 預設
+        if direction == "BUY_UP" and pm_up and pm_up > 0:
+            contract_price = pm_up
+        elif direction == "SELL_DOWN" and pm_down and pm_down > 0:
+            contract_price = pm_down
+
+        # 利潤過濾器
+        if self.config.use_profit_filter and config.PROFIT_FILTER_ENABLED:
+            if 0 < contract_price < 1:
+                expected_return_rate = (1.0 / contract_price) - 1.0
+                expected_gross_profit = expected_return_rate * amount
+                round_trip = fee_model.estimate_round_trip_cost(
+                    amount, buy_price=contract_price, sell_price=contract_price
+                )
+                total_fee = round_trip["total_fee"]
+                min_required = total_fee * config.PROFIT_FILTER_MIN_PROFIT_RATIO
+                if expected_gross_profit < min_required:
+                    return  # 利潤不足，放棄交易
+
         # 手續費
         entry_fee = 0.0
         if self.config.use_fees:
-            fee_result = fee_model.calculate_buy_fee(amount, self.config.contract_price)
+            fee_result = fee_model.calculate_buy_fee(amount, contract_price)
             entry_fee = fee_result.fee_amount
 
         self._balance -= (amount + entry_fee)
@@ -246,13 +286,14 @@ class Backtester:
 
         trade = BacktestTrade(
             trade_id=self._trade_counter,
-            direction=signal["direction"],
+            direction=direction,
             entry_price=btc_price,
             quantity=amount,
             entry_fee=entry_fee,
             entry_time=ts,
             trading_mode=self.config.trading_mode,
             signal_score=signal.get("score", 0),
+            contract_price=contract_price,
         )
         self._open_trades.append(trade)
 
@@ -272,13 +313,15 @@ class Backtester:
         else:  # SELL_DOWN
             won = not price_went_up
 
-        # 計算 PnL
+        # 計算 PnL（Phase 2.1: 使用實際合約價格計算回報率）
         exit_fee = 0.0
+        cp = trade.contract_price if trade.contract_price > 0 else 0.5
         if won:
-            gross_profit = trade.quantity * self.config.win_payout_rate
+            return_rate = (1.0 / cp) - 1.0
+            gross_profit = trade.quantity * return_rate
             if self.config.use_fees:
                 sell_fee_result = fee_model.calculate_sell_fee(
-                    trade.quantity + gross_profit, self.config.contract_price
+                    trade.quantity + gross_profit, cp
                 )
                 exit_fee = sell_fee_result.fee_amount
             pnl = gross_profit - exit_fee
