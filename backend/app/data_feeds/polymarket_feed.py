@@ -42,9 +42,13 @@ class PolymarketState:
         self.up_token_id: Optional[str] = None
         self.down_token_id: Optional[str] = None
 
-        # 合約價格
-        self.up_price: Optional[float] = None
-        self.down_price: Optional[float] = None
+        # 合約價格 (best_ask = 買入價，best_bid = 賣出價)
+        self.up_price: Optional[float] = None       # UP 合約 best_ask
+        self.down_price: Optional[float] = None     # DOWN 合約 best_ask
+        self.up_bid: Optional[float] = None         # UP 合約 best_bid
+        self.down_bid: Optional[float] = None       # DOWN 合約 best_bid
+        self.up_spread: Optional[float] = None      # UP 合約 spread 比例
+        self.down_spread: Optional[float] = None    # DOWN 合約 spread 比例
 
         # 市場流動性
         self.liquidity: Optional[float] = None
@@ -239,19 +243,30 @@ class PolymarketFeed(Component):
             if isinstance(data, list):
                 for entry in data:
                     asset_id = entry.get("asset_id")
+                    # 取得 best_ask（買入價）
+                    best_ask = None
                     asks = entry.get("asks", [])
                     if asks:
-                        price = min(float(a["price"]) for a in asks)
-                        self._update_price(asset_id, price)
+                        best_ask = min(float(a["price"]) for a in asks)
+                    # 取得 best_bid（賣出價）
+                    best_bid = None
+                    bids = entry.get("bids", [])
+                    if bids:
+                        best_bid = max(float(b["price"]) for b in bids)
+                    if best_ask is not None:
+                        self._update_price(asset_id, best_ask, best_bid)
 
             elif isinstance(data, dict):
                 event_type = data.get("event_type", "")
                 if event_type == "price_change":
                     for ch in data.get("price_changes", []):
                         best_ask = ch.get("best_ask")
+                        best_bid = ch.get("best_bid")
                         if best_ask:
                             self._update_price(
-                                ch["asset_id"], float(best_ask)
+                                ch["asset_id"],
+                                float(best_ask),
+                                float(best_bid) if best_bid else None,
                             )
 
             self.state.last_update = time.time()
@@ -262,6 +277,10 @@ class PolymarketFeed(Component):
                 {
                     "up_price": self.state.up_price,
                     "down_price": self.state.down_price,
+                    "up_bid": self.state.up_bid,
+                    "down_bid": self.state.down_bid,
+                    "up_spread": self.state.up_spread,
+                    "down_spread": self.state.down_spread,
                 },
                 source=self._name,
             )
@@ -273,12 +292,30 @@ class PolymarketFeed(Component):
         except Exception as e:
             logger.debug(f"WebSocket 訊息處理錯誤: {e}")
 
-    def _update_price(self, asset_id: str, price: float):
-        """更新 UP/DOWN 合約價格"""
+    def _update_price(self, asset_id: str, ask_price: float, bid_price: Optional[float] = None):
+        """
+        更新 UP/DOWN 合約價格（含 bid/ask/spread）
+
+        Args:
+            asset_id: Token ID
+            ask_price: 最佳賣價（= 買入成本）
+            bid_price: 最佳買價（= 賣出可得），可能為 None
+        """
         if asset_id == self.state.up_token_id:
-            self.state.up_price = price
+            self.state.up_price = ask_price
+            if bid_price is not None:
+                self.state.up_bid = bid_price
+                # 計算 spread: (ask - bid) / ask
+                self.state.up_spread = round(
+                    (ask_price - bid_price) / ask_price, 6
+                ) if ask_price > 0 else None
         elif asset_id == self.state.down_token_id:
-            self.state.down_price = price
+            self.state.down_price = ask_price
+            if bid_price is not None:
+                self.state.down_bid = bid_price
+                self.state.down_spread = round(
+                    (ask_price - bid_price) / ask_price, 6
+                ) if ask_price > 0 else None
 
     async def _market_poller(self):
         """定期輪詢市場資訊（檢查市場更新、切換新市場）"""
@@ -299,6 +336,10 @@ class PolymarketFeed(Component):
             "market_title": self.state.market_title,
             "up_price": self.state.up_price,
             "down_price": self.state.down_price,
+            "up_bid": self.state.up_bid,
+            "down_bid": self.state.down_bid,
+            "up_spread": self.state.up_spread,
+            "down_spread": self.state.down_spread,
             "liquidity": self.state.liquidity,
             "volume": self.state.volume,
             "has_tokens": self.state.up_token_id is not None,

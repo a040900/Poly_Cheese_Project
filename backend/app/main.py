@@ -28,7 +28,9 @@ from app.data_feeds.binance_feed import BinanceFeed
 from app.data_feeds.polymarket_feed import PolymarketFeed
 from app.data_feeds.chainlink_feed import ChainlinkFeed
 from app.strategy.signal_generator import SignalGenerator
+from app.trading.engine import TradingEngine, EngineType
 from app.trading.simulator import SimulationEngine
+from app.trading.live_trader import LiveTradingEngine
 from app.security.password_manager import password_manager
 from app.database import db
 from app.performance.tracker import PerformanceTracker
@@ -67,7 +69,19 @@ binance_feed = BinanceFeed()
 polymarket_feed = PolymarketFeed()
 chainlink_feed = ChainlinkFeed()
 signal_generator = SignalGenerator()
-sim_engine = SimulationEngine()
+
+# Step 15+16: 統一交易引擎介面
+# 根據 PM_LIVE_ENABLED 環境變數自動選擇引擎
+if config.PM_LIVE_ENABLED:
+    logger.warning("🔴 實盤模式已啟用！所有交易將使用真實資金！")
+    trading_engine: TradingEngine = LiveTradingEngine()
+    trading_engine.set_trade_limits(
+        max_single=config.PM_LIVE_MAX_SINGLE_TRADE,
+        max_total=config.PM_LIVE_MAX_TOTAL_TRADED,
+    )
+else:
+    trading_engine: TradingEngine = SimulationEngine()
+sim_engine = trading_engine  # 向下相容別名
 perf_tracker = PerformanceTracker(config.SIM_INITIAL_BALANCE)
 
 # WebSocket 連線管理

@@ -38,8 +38,10 @@ class ChainlinkState:
 
 # 備用 Polygon RPC URL 列表（公共免費節點）
 _POLYGON_RPC_FALLBACKS = [
-    config.POLYGON_RPC_URL,
+    "https://polygon.drpc.org",
+    "https://polygon.rpc.subquery.network/public",
     "https://polygon-bor-rpc.publicnode.com",
+    "https://1rpc.io/matic",
     "https://rpc.ankr.com/polygon",
 ]
 

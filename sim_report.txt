@@ -1,0 +1,53 @@
+2026-02-19 00:20:43,767 | cheesedog.database   | INFO    | 資料庫已初始化: C:\Users\a0409\.gemini\antigravity\scratch\cheeseproject\data\cheesedog.db
+2026-02-19 00:20:43,773 | cheesedog.risk_manager | INFO    | 🛡️ 風險管理器已初始化
+2026-02-19 00:20:44,009 | sim_test             | INFO    | 🎬 開始模擬交易週期測試 (Full Cycle Test)
+2026-02-19 00:20:44,010 | sim_test             | INFO    | ============================================================
+2026-02-19 00:20:44,011 | cheesedog.trading.simulator | INFO    | 💰 模擬交易引擎已初始化 | 初始資金: $1000.00 USDC
+2026-02-19 00:20:44,011 | cheesedog.trading.simulator | INFO    | 🔄 模擬帳戶已重置 | 初始資金: $1000.00
+2026-02-19 00:20:44,011 | sim_test             | INFO    | 💰 初始餘額: $1,000.00
+2026-02-19 00:20:44,011 | cheesedog.core.bus   | INFO    | 🚌 MessageBus 已啟動
+2026-02-19 00:20:44,011 | cheesedog.feeds.binance | INFO    | 🔄 [feeds.binance] INITIALIZING → READY (初始化完成)
+2026-02-19 00:20:44,012 | cheesedog.feeds.binance | INFO    | 🟢 啟動 Binance 數據訂閱 [BTCUSDT]
+2026-02-19 00:20:44,221 | cheesedog.feeds.binance | INFO    | 📊 已載入 100 根歷史 K 線
+2026-02-19 00:20:44,222 | cheesedog.feeds.binance | INFO    | 🔄 [feeds.binance] READY → RUNNING (開始運行)
+2026-02-19 00:20:44,222 | cheesedog.trading.simulator | INFO    | 🟢 模擬交易引擎已啟動
+2026-02-19 00:20:44,222 | sim_test             | INFO    | ⏳ 等待 Binance 數據 (5秒)...
+2026-02-19 00:20:44,223 | cheesedog.feeds.binance | INFO    | 📖 啟動訂單簿輪詢 [BTCUSDT] 每 5 秒
+2026-02-19 00:20:44,424 | cheesedog.feeds.binance | INFO    | 🔗 Binance WebSocket 已連線 [BTCUSDT]
+2026-02-19 00:20:49,233 | sim_test             | INFO    | 📊 當前市場價格參考: $67,250.65
+2026-02-19 00:20:49,234 | sim_test             | INFO    | ------------------------------------------------------------
+2026-02-19 00:20:49,234 | sim_test             | INFO    | 🚀 [Action] 注入 BUY 信號...
+2026-02-19 00:20:49,274 | cheesedog.trading.simulator | INFO    | 📈 模擬交易開倉 | 方向: BUY_UP | 市場: BTC 15m UP/DOWN | 合約價: 0.4500 | 金額: $100.00 | 手續費: $0.2443 | 剩餘: $899.76
+2026-02-19 00:20:49,274 | sim_test             | INFO    | ✅ 開倉成功! Trade ID: 37
+2026-02-19 00:20:49,274 | sim_test             | INFO    |    Entry Price: $0.45 (UP Token)
+2026-02-19 00:20:49,275 | sim_test             | INFO    |    Amount: $45.00 USDC
+2026-02-19 00:20:49,275 | sim_test             | INFO    |    Balance: $899.76
+2026-02-19 00:20:49,275 | sim_test             | INFO    | ------------------------------------------------------------
+2026-02-19 00:20:49,275 | sim_test             | INFO    | ⏳ 持倉中... (模擬 3 秒經過)
+2026-02-19 00:20:52,280 | sim_test             | INFO    | 📋 當前持倉數: 1
+2026-02-19 00:20:52,281 | sim_test             | INFO    | ------------------------------------------------------------
+2026-02-19 00:20:52,281 | sim_test             | INFO    | 🛑 [Action] 注入 SELL (平倉) 信號...
+2026-02-19 00:20:52,282 | cheesedog.trading.simulator | INFO    | 🔄 收到反向信號 SELL_DOWN，正在平倉 1 筆 BUY_UP 交易...
+2026-02-19 00:20:52,283 | cheesedog.trading.simulator | INFO    | ✅ 反向平倉完成 | 總盈虧: $22.22
+2026-02-19 00:20:52,283 | sim_test             | INFO    | ✅ 平倉成功! 所有持倉已結算。
+2026-02-19 00:20:52,283 | sim_test             | INFO    | 💰 最終餘額: $1,021.98
+2026-02-19 00:20:52,283 | sim_test             | INFO    | 📈 交易統計: {
+  "balance": 1021.98,
+  "initial_balance": 1000.0,
+  "total_pnl": 22.22,
+  "total_pnl_pct": 2.22,
+  "total_trades": 1,
+  "closed_trades": 1,
+  "open_trades": 0,
+  "wins": 1,
+  "losses": 0,
+  "win_rate": 100.0,
+  "is_running": true,
+  "engine_type": "simulation"
+}
+2026-02-19 00:20:52,283 | sim_test             | INFO    | 🎉 測試通過: 餘額增加 (獲利確認)
+2026-02-19 00:20:52,283 | sim_test             | INFO    | ============================================================
+2026-02-19 00:20:52,284 | cheesedog.feeds.binance | INFO    | 🔄 [feeds.binance] RUNNING → STOPPED (已停止)
+2026-02-19 00:20:52,284 | cheesedog.feeds.binance | INFO    | 🔴 Binance 數據訂閱已停止
+2026-02-19 00:20:52,285 | cheesedog.core.bus   | INFO    | 🛑 MessageBus 已停止 (發佈: 636, 處理: 0, 錯誤: 0)
+2026-02-19 00:20:52,285 | sim_test             | INFO    | 👋 測試結束

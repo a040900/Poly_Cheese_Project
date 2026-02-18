@@ -1,0 +1,43 @@
+2026-02-18 23:46:47,855 | feed_test            | INFO    | 🚀 開始全功能數據源測試 (Binance, Polymarket, Chainlink)...
+2026-02-18 23:46:47,855 | feed_test            | INFO    | ============================================================
+2026-02-18 23:46:47,856 | cheesedog.core.bus   | INFO    | 🚌 MessageBus 已啟動
+2026-02-18 23:46:47,856 | cheesedog.feeds.binance | INFO    | 🔄 [feeds.binance] INITIALIZING → READY (初始化完成)
+2026-02-18 23:46:47,856 | cheesedog.feeds.binance | INFO    | 🟢 啟動 Binance 數據訂閱 [BTCUSDT]
+2026-02-18 23:46:47,966 | cheesedog.feeds.binance | INFO    | 📊 已載入 100 根歷史 K 線
+2026-02-18 23:46:47,967 | cheesedog.feeds.binance | INFO    | 🔄 [feeds.binance] READY → RUNNING (開始運行)
+2026-02-18 23:46:47,967 | cheesedog.feeds.polymarket | INFO    | 🔄 [feeds.polymarket] INITIALIZING → READY (初始化完成)
+2026-02-18 23:46:47,968 | cheesedog.feeds.polymarket | INFO    | 🟢 啟動 Polymarket 數據訂閱
+2026-02-18 23:46:47,969 | cheesedog.feeds.binance | INFO    | 📖 啟動訂單簿輪詢 [BTCUSDT] 每 5 秒
+2026-02-18 23:46:48,033 | cheesedog.feeds.polymarket | INFO    | 📊 Polymarket 市場: Bitcoin Up or Down - February 18, 10:45AM-11:00AM ET
+   UP Token: 1005809398309891...
+   DN Token: 6354934049164778...
+2026-02-18 23:46:48,034 | cheesedog.feeds.polymarket | INFO    | ✅ 已獲取 Polymarket 市場資訊: btc-updown-15m-1771429500
+2026-02-18 23:46:48,035 | cheesedog.feeds.polymarket | INFO    | 🔄 [feeds.polymarket] READY → RUNNING (開始運行)
+2026-02-18 23:46:48,035 | cheesedog.feeds.chainlink | INFO    | 🔄 [feeds.chainlink] INITIALIZING → READY (初始化完成)
+2026-02-18 23:46:48,035 | cheesedog.feeds.chainlink | INFO    | 🟢 啟動 Chainlink BTC/USD 價格訂閱
+2026-02-18 23:46:48,247 | cheesedog.feeds.binance | INFO    | 🔗 Binance WebSocket 已連線 [BTCUSDT]
+2026-02-18 23:46:48,451 | cheesedog.feeds.chainlink | INFO    | 📊 Chainlink BTC/USD 精度: 8
+2026-02-18 23:46:48,452 | cheesedog.feeds.chainlink | INFO    | 🔄 [feeds.chainlink] READY → RUNNING (開始運行)
+2026-02-18 23:46:48,452 | feed_test            | INFO    | ⏳ 等待數據暖機 (15秒)...
+2026-02-18 23:46:48,759 | cheesedog.feeds.polymarket | INFO    | 🔗 Polymarket WebSocket 已連線
+2026-02-18 23:47:03,459 | feed_test            | INFO    | ------------------------------------------------------------
+2026-02-18 23:47:03,459 | feed_test            | INFO    | 🔍 檢查 Binance Feed...
+2026-02-18 23:47:03,459 | feed_test            | ERROR   | ❌ Binance 異常 | State: {'connected': True, 'last_update': 1771429623.2280881, 'error': None, 'symbol': 'BTCUSDT', 'mid_price': 67999.755, 'bids': [(67999.75, 1.46596), (67999.74, 0.00035), (67999.73, 0.00027), (67999.33, 8e-05), (67999.32, 8e-05)], 'asks': [(67999.76, 4.10292), (67999.77, 0.14802), (67999.79, 0.00016), (67999.8, 0.05016), (67999.84, 0.00016)], 'trade_count': 1824, 'kline_count': 102, 'current_kline': {'t': 1771429620.0, 'o': 68012.1, 'h': 68012.11, 'l': 67999.75, 'c': 67999.75, 'v': 0.41307}, 'component_state': 'RUNNING'}
+2026-02-18 23:47:03,460 | feed_test            | INFO    | ------------------------------------------------------------
+2026-02-18 23:47:03,460 | feed_test            | INFO    | 🔍 檢查 Polymarket Feed...
+2026-02-18 23:47:03,460 | feed_test            | INFO    | ✅ Polymarket OK | Market: Bitcoin Up or Down - February 18, 10:45AM-11:00AM ET
+2026-02-18 23:47:03,460 | feed_test            | INFO    |    UP Price: 0.34 | DOWN Price: 0.67
+2026-02-18 23:47:03,460 | feed_test            | INFO    |    Liquidity: $25,900.58
+2026-02-18 23:47:03,460 | feed_test            | INFO    | ------------------------------------------------------------
+2026-02-18 23:47:03,461 | feed_test            | INFO    | 🔍 檢查 Chainlink Feed...
+2026-02-18 23:47:03,461 | feed_test            | INFO    | ✅ Chainlink OK | Price: $67,990.10
+2026-02-18 23:47:03,461 | feed_test            | INFO    |    RPC Updated: 2026-02-18 23:46:32
+2026-02-18 23:47:03,461 | feed_test            | INFO    | ============================================================
+2026-02-18 23:47:03,461 | cheesedog.feeds.binance | INFO    | 🔄 [feeds.binance] RUNNING → STOPPED (已停止)
+2026-02-18 23:47:03,461 | cheesedog.feeds.binance | INFO    | 🔴 Binance 數據訂閱已停止
+2026-02-18 23:47:03,462 | cheesedog.feeds.polymarket | INFO    | 🔄 [feeds.polymarket] RUNNING → STOPPED (已停止)
+2026-02-18 23:47:03,462 | cheesedog.feeds.polymarket | INFO    | 🔴 Polymarket 數據訂閱已停止
+2026-02-18 23:47:03,462 | cheesedog.feeds.chainlink | INFO    | 🔄 [feeds.chainlink] RUNNING → STOPPED (已停止)
+2026-02-18 23:47:03,462 | cheesedog.feeds.chainlink | INFO    | 🔴 Chainlink 價格訂閱已停止
+2026-02-18 23:47:03,463 | cheesedog.core.bus   | INFO    | 🛑 MessageBus 已停止 (發佈: 5332, 處理: 0, 錯誤: 0)
+2026-02-18 23:47:03,463 | feed_test            | INFO    | 👋 測試完成

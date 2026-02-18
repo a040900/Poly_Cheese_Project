@@ -205,42 +205,52 @@ cheeseproject/
 > 📌 **前置條件**: 第二階段回測驗證策略有效性
 > ⚠️ **重要**: 此階段涉及真實資金操作，需嚴格測試
 
-### 步驟 15：策略介面統一
+### 步驟 15：策略介面統一 ✅
 > 💡 借鏡 NautilusTrader 核心理念：回測和實盤使用相同的策略代碼
 
-- [ ] 抽象出統一的 `TradingEngine` 介面
+- [x] 抽象出統一的 `TradingEngine` 介面 (`trading/engine.py`)
   - `execute_trade(signal, amount)` → 統一交易執行介面
-  - `settle_trade(trade, result)` → 統一結算介面
+  - `auto_settle_expired(btc_start, btc_end)` → 統一結算介面
   - `get_balance()` → 統一餘額查詢介面
-- [ ] `SimulationEngine` 實作 `TradingEngine` 介面（已有，需重構）
-- [ ] `LiveTradingEngine` 實作相同介面（新建）
-- [ ] 切換模擬/實盤只需更換引擎實例，策略邏輯零修改
+  - `get_open_trades()` → 統一持倉查詢
+  - `emergency_stop(reason)` → 緊急停止
+- [x] `SimulationEngine` 實作 `TradingEngine` 介面（已重構）
+- [x] `LiveTradingEngine` 實作相同介面（骨架已建立）
+- [x] 切換模擬/實盤只需更換引擎實例，策略邏輯零修改
 
-### 步驟 16：Polymarket CLOB API 實盤整合
+### 步驟 16：Polymarket CLOB API 實盤整合 ✅
 > ⚠️ 注意 Quote Quantity vs Base Quantity 區別（借鏡 NautilusTrader 文件警告）
 
-- [ ] `trading/live_trader.py` — 實盤交易引擎
-  - Polymarket CLOB API 認證（API Key + Secret + Passphrase）
-  - 訂單簽名（注意：Python 簽名約需 1 秒延遲）
+- [x] `trading/live_trader.py` — 實盤交易引擎
+  - Polymarket CLOB API 認證（Private Key → L1 Auth → L2 API Creds）
+  - 使用 `py-clob-client` 官方 SDK
   - **Market BUY = Quote Quantity (USDC 面值)**
   - **Market SELL = Base Quantity (Token 數量)**
-  - 搞混會導致交易量遠超預期！
-- [ ] 訂單狀態追蹤
-  - `MATCHED → MINED → CONFIRMED` 完整生命週期
-  - 處理 `RETRYING` 和 `FAILED` 狀態
+  - FOK (Fill or Kill) 訂單確保完全成交
+- [x] 多層安全防護
+  - `PM_LIVE_ENABLED` 環境變數開關（預設 false）
+  - 單筆金額硬上限 (預設 $10)
+  - 累計金額硬上限 (預設 $100)
+  - 緊急鎖定機制 (emergency_stop + cancel_all)
+  - RiskManager 熔斷器整合
+  - 利潤過濾器整合
+- [x] 訂單生命週期追蹤
+  - 記錄 order_id、簽名耗時、提交耗時
+  - 存入 DB（trade_type="live" 區分實盤）
 - [ ] 倉位核對 (Reconciliation)
   - 定期核對鏈上倉位與系統記錄
   - 偵測並修正不一致
 
-### 步驟 17：進階風險管理
+### 步驟 17：進階風險管理 🟡 部分完成
 > 💡 借鏡 NautilusTrader `RiskEngine` 獨立風險引擎設計
 
-- [ ] 獨立 `RiskEngine` 模組
+- [x] 獨立 `RiskManager` 模組 (`trading/risk_manager.py`)
   - 交易前驗證（餘額、持倉上限、頻率限制）
   - 單日最大虧損限制 → 自動停止交易
   - 連續虧損熔斷機制
+  - Kelly Criterion 倉位管理
 - [ ] 緊急停止功能
-  - 一鍵取消所有掛單
+  - 一鍵取消所有掛單（待 Step 16 實盤 API）
   - 停止接收新信號
   - 記錄緊急停止原因
 

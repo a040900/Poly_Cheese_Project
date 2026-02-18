@@ -289,10 +289,22 @@ RISK_MANAGEMENT = {
 # 模擬交易設定
 # ═══════════════════════════════════════════════════════════════
 SIM_INITIAL_BALANCE = float(os.getenv("SIM_INITIAL_BALANCE", "1000.0"))
+
+# ── Polygon / Chainlink (Phase 2 & 3) ─────────────────────────
+# 公用節點可能不穩定，建議換成 Alchemy/Infura
+POLYGON_RPC_URL = os.getenv("POLYGON_RPC_URL", "https://polygon.drpc.org")
+CHAINLINK_BTC_USD_AGGREGATOR = "0xc907E116054Ad103354f2D350FD2514433D57F6f"
+CHAINLINK_POLL_INTERVAL = 30  # 秒
+
 SIM_FEE_PCT = 0.001         # 模擬手續費 0.1%（Phase 1 簡化值）
 
 # Phase 3: 信號冷卻期（同方向信號在 N 秒內不重複觸發）
 SIGNAL_COOLDOWN_SECONDS = 120  # 2 分鐘冷卻
+
+# Phase 3 Step 16: 實盤交易開關與安全設定
+PM_LIVE_ENABLED = os.getenv("PM_LIVE_ENABLED", "false").lower() == "true"
+PM_LIVE_MAX_SINGLE_TRADE = float(os.getenv("PM_LIVE_MAX_SINGLE_TRADE", "10.0"))
+PM_LIVE_MAX_TOTAL_TRADED = float(os.getenv("PM_LIVE_MAX_TOTAL_TRADED", "100.0"))
 
 # Phase 2: Polymarket 15m 市場浮動手續費（借鏡 NautilusTrader 文件）
 # Buy 端手續費: 0.2% - 1.6%（從 Token 扣除）
@@ -305,8 +317,8 @@ PM_FEE_SELL_DEFAULT = 0.015          # 預設 Sell 手續費 1.5%
 # Phase 2.1: 利潤過濾器 (Profit Filter)
 # 開倉前先估算「扣掉手續費+價差後還有沒有賺頭」
 PROFIT_FILTER_ENABLED = True                # 是否啟用利潤過濾器
-PROFIT_FILTER_MAX_SPREAD_PCT = 0.02         # 最大允許 Spread 比例（2%），超過代表流動性差
-PROFIT_FILTER_MIN_PROFIT_RATIO = 1.5        # 預期毛利需為來回手續費的 N 倍才放行
+PROFIT_FILTER_MAX_SPREAD_PCT = 0.05         # 最大允許 Spread 放寬至 5%（校準後調整）
+PROFIT_FILTER_MIN_PROFIT_RATIO = 1.1        # 預期毛利需為來回手續費的 1.1 倍即可（校準後調整）
 PROFIT_FILTER_MIN_TRADE_AMOUNT = 1.0        # 最低交易金額 (USDC)，低於此不交易
 
 # ═══════════════════════════════════════════════════════════════

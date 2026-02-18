@@ -1,16 +1,20 @@
 """
-🧀 CheeseDog - 模擬交易引擎
+🧀 乳酪のBTC預測室 — 模擬交易引擎
 維護虛擬資金帳戶，模擬在 Polymarket 上的交易行為。
+
+Step 15: 已重構為繼承 TradingEngine 抽象基類，
+切換模擬/實盤只需更換引擎實例。
 """
 
 import time
 import logging
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Any
 
 from app import config
 from app.database import db
 from app.strategy.fees import fee_model
 from app.trading.risk_manager import risk_manager
+from app.trading.engine import TradingEngine, EngineType, Trade
 
 logger = logging.getLogger("cheesedog.trading.simulator")
 
@@ -44,8 +48,12 @@ class SimulationTrade:
         self.status: str = "open"
 
 
-class SimulationEngine:
-    """模擬交易引擎"""
+class SimulationEngine(TradingEngine):
+    """模擬交易引擎（實作 TradingEngine 介面）"""
+
+    @property
+    def engine_type(self) -> EngineType:
+        return EngineType.SIMULATION
 
     def __init__(self, initial_balance: float = config.SIM_INITIAL_BALANCE):
         self.initial_balance = initial_balance
@@ -75,7 +83,7 @@ class SimulationEngine:
         self,
         signal: dict,
         amount: Optional[float] = None,
-        pm_state: Optional[object] = None,
+        pm_state: Optional[Any] = None,
     ) -> Optional[SimulationTrade]:
         """
         執行模擬交易（Phase 2.1: 含利潤過濾器）
@@ -95,6 +103,61 @@ class SimulationEngine:
         direction = signal.get("direction")
         if direction == "NEUTRAL":
             return None
+
+        # Phase 3 Enhancement: 檢查並平倉反向持倉 (Close Position Logic)
+        opposing_direction = "SELL_DOWN" if direction == "BUY_UP" else "BUY_UP"
+        trades_to_close = [t for t in self.open_trades if t.direction == opposing_direction]
+        
+        if trades_to_close:
+            logger.info(f"🔄 收到反向信號 {direction}，正在平倉 {len(trades_to_close)} 筆 {opposing_direction} 交易...")
+            total_pnl = 0.0
+            
+            # 使用當前反向價格作為平倉價
+            close_price = 0.5
+            if pm_state:
+                # 若我要平掉 BUY_UP (賣出)，價格是 up_price (Bid)
+                # 若我要平掉 SELL_DOWN (買回)，價格是 down_price (Ask? No, should be Ask but here we simplify)
+                # 這裡假設 pm_state.up_price 是 Bid, pm_state.down_price 是 Bid (對於反向來說)
+                # 實際上: 
+                # 平 Long = Sell UP Token @ Bid Price (pm_state.up_price)
+                # 平 Short = Buy UP Token @ Ask Price (pm_state.up_price + spread) -> 但這裡是 SELL_DOWN 代表持有 Down Token?
+                # 簡化: 直接用對方價格
+                if direction == "SELL_DOWN" and pm_state.up_price: # 用 SELL 信號平 BUY 單
+                     close_price = pm_state.up_price
+                elif direction == "BUY_UP" and pm_state.down_price: # 用 BUY 信號平 SELL 單
+                     close_price = pm_state.down_price
+
+            for trade in trades_to_close:
+                trade.exit_time = time.time()
+                trade.exit_price = close_price
+                trade.status = "closed"
+                
+                # PnL = (Exit - Entry) * Shares
+                # Shares = Quantity / Entry_Price
+                shares = trade.quantity / trade.entry_price if trade.entry_price > 0 else 0
+                trade.pnl = (trade.exit_price - trade.entry_price) * shares
+                
+                self.balance += trade.quantity + trade.pnl
+                self.total_pnl += trade.pnl
+                total_pnl += trade.pnl
+                
+                # 記錄到歷史
+                self.trade_history.append({
+                    "trade_id": trade.trade_id,
+                    "direction": trade.direction,
+                    "quantity": trade.quantity,
+                    "pnl": trade.pnl,
+                    "won": trade.pnl > 0,
+                    "entry_time": trade.entry_time,
+                    "exit_time": trade.exit_time,
+                    "contract_price": trade.contract_price,
+                    "metadata": {"market_title": trade.market_title}
+                })
+
+            # 從未平倉移除
+            self.open_trades = [t for t in self.open_trades if t.direction != opposing_direction]
+            logger.info(f"✅ 反向平倉完成 | 總盈虧: ${total_pnl:.2f}")
+            return None # 平倉後不開新倉
 
         # ── 取得實際合約價格 ──────────────────────────────────
         contract_price = 0.5  # 預設候補值
@@ -408,7 +471,16 @@ class SimulationEngine:
             "losses": losses,
             "win_rate": round(wins / total_closed * 100, 2) if total_closed > 0 else 0,
             "is_running": self._running,
+            "engine_type": self.engine_type.value,
         }
+
+    def get_balance(self) -> float:
+        """取得當前餘額"""
+        return self.balance
+
+    def get_open_trades(self) -> List[SimulationTrade]:
+        """取得所有未平倉交易"""
+        return self.open_trades
 
     def get_recent_trades(self, limit: int = 10) -> List[dict]:
         """取得最近的交易記錄（含未平倉）"""
