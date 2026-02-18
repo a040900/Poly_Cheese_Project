@@ -25,6 +25,7 @@ class SimulationTrade:
         quantity: float,
         signal_score: float,
         trading_mode: str,
+        market_title: Optional[str] = None,
     ):
         self.trade_id = trade_id
         self.direction = direction       # "BUY_UP" 或 "SELL_DOWN"
@@ -32,6 +33,7 @@ class SimulationTrade:
         self.quantity = quantity          # USDC 金額
         self.signal_score = signal_score
         self.trading_mode = trading_mode
+        self.market_title = market_title  # Polymarket 市場標題（例如：Bitcoin Up or Down - February 17, 1:30PM-1:45PM ET）
         self.entry_time = time.time()
         self.exit_price: Optional[float] = None
         self.exit_time: Optional[float] = None
@@ -109,6 +111,9 @@ class SimulationEngine:
         fee_result = fee_model.calculate_buy_fee(amount, contract_price=0.5)
         fee = fee_result.fee_amount
 
+        # 取得 Polymarket 市場標題
+        market_title = signal.get("market_title", "BTC 15m UP/DOWN")
+
         # 記錄到資料庫
         trade_data = {
             "trade_type": "simulation",
@@ -127,6 +132,7 @@ class SimulationEngine:
                 "fee_model": "polymarket_15m",
                 "fee_side": "buy",
                 "fee_deducted_in": fee_result.fee_deducted_in,
+                "market_title": market_title,  # 記錄市場標題
             },
         }
         trade_id = db.save_trade(trade_data)
@@ -139,6 +145,7 @@ class SimulationEngine:
             quantity=amount,
             signal_score=signal.get("score", 0),
             trading_mode=signal.get("mode", "balanced"),
+            market_title=market_title,  # 傳遞市場標題
         )
 
         # 扣除資金和手續費
@@ -148,6 +155,7 @@ class SimulationEngine:
 
         logger.info(
             f"📈 模擬交易開倉 | 方向: {direction} | "
+            f"市場: {market_title} | "
             f"金額: ${amount:.2f} | 手續費: ${fee:.4f} | "
             f"剩餘: ${self.balance:.2f}"
         )
@@ -290,11 +298,12 @@ class SimulationEngine:
                 "trade_id": t.trade_id,
                 "direction": t.direction,
                 "quantity": round(t.quantity, 2),
-                "pnl": 0,
+                "pnl": round(t.pnl, 2),  # 顯示當前未實現 PnL
                 "status": "open",
                 "entry_time": t.entry_time,
                 "elapsed_min": round(elapsed / 60, 1),
                 "trading_mode": t.trading_mode,
+                "market_title": t.market_title or "BTC 15m UP/DOWN",  # 市場標題
             })
 
         # 最近已結算交易（倒序，最新的在前）
@@ -308,6 +317,7 @@ class SimulationEngine:
                 "won": t.get("won", False),
                 "entry_time": t.get("entry_time", 0),
                 "exit_time": t.get("exit_time", 0),
+                "market_title": t.get("metadata", {}).get("market_title", "BTC 15m UP/DOWN"),  # 從 metadata 取得市場標題
             })
 
         return trades

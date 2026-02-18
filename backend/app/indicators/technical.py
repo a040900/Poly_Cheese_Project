@@ -210,3 +210,67 @@ def ha_streak(klines: List[dict], max_candles: int = 3) -> int:
                 break
 
     return streak
+
+
+def bollinger_bands(
+    klines: List[dict],
+    period: int = 20,
+    num_std: float = 2.0,
+) -> Optional[dict]:
+    """
+    計算布林通道 (Bollinger Bands)
+
+    布林通道 = SMA ± N 倍標準差
+    %B = (價格 - 下軌) / (上軌 - 下軌)
+
+    %B > 1.0: 價格突破上軌（超買 / 強勢突破）
+    %B < 0.0: 價格跌破下軌（超賣 / 弱勢突破）
+    %B ≈ 0.5: 價格在中軌附近
+
+    帶寬 (Bandwidth) = (上軌 - 下軌) / 中軌
+    帶寬越窄 = 波動率越低 → 可能即將爆發（Squeeze）
+
+    Args:
+        klines: K 線數據列表
+        period: 移動平均週期
+        num_std: 標準差倍數
+
+    Returns:
+        {
+            "upper": float,   # 上軌
+            "middle": float,  # 中軌 (SMA)
+            "lower": float,   # 下軌
+            "pct_b": float,   # %B 值
+            "bandwidth": float, # 帶寬
+        }
+        或 None
+    """
+    closes = [k["c"] for k in klines]
+    if len(closes) < period:
+        return None
+
+    # SMA
+    sma = sum(closes[-period:]) / period
+
+    # 標準差
+    variance = sum((c - sma) ** 2 for c in closes[-period:]) / period
+    std_dev = variance ** 0.5
+
+    upper = sma + num_std * std_dev
+    lower = sma - num_std * std_dev
+
+    # %B: 價格在通道中的相對位置
+    band_width = upper - lower
+    price = closes[-1]
+    pct_b = (price - lower) / band_width if band_width > 0 else 0.5
+
+    # 帶寬 (正規化)
+    bandwidth = band_width / sma if sma > 0 else 0.0
+
+    return {
+        "upper": round(upper, 2),
+        "middle": round(sma, 2),
+        "lower": round(lower, 2),
+        "pct_b": round(pct_b, 4),
+        "bandwidth": round(bandwidth, 6),
+    }

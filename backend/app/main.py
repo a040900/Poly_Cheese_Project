@@ -145,7 +145,7 @@ async def on_market_data_event(event: Event):
                 for t in sim_engine.open_trades
             )
             if not has_open:
-                sim_engine.execute_trade(signal)
+                sim_engine.execute_trade(signal, pm_state=polymarket_feed.state)
 
         # 保存市場快照
         pm = polymarket_feed.state
@@ -251,6 +251,10 @@ def build_dashboard_data() -> dict:
             "btc_price": bs.mid,
             "pm_up_price": ps.up_price,
             "pm_down_price": ps.down_price,
+            "pm_up_bid": ps.up_bid,
+            "pm_down_bid": ps.down_bid,
+            "pm_up_spread": ps.up_spread,
+            "pm_down_spread": ps.down_spread,
             "chainlink_price": cs.btc_price,
             "pm_market_title": ps.market_title,
             "pm_liquidity": ps.liquidity,
@@ -282,6 +286,8 @@ def build_dashboard_data() -> dict:
         "security": password_manager.get_status(),
         # Phase 2: MessageBus 統計
         "event_bus": bus.get_stats(),
+        # Phase 2: 最新 AI 建議（推播到主畫面底部欄位）
+        "latest_advice": llm_advisor.get_last_advice(),
     }
 
 
@@ -772,6 +778,169 @@ async def get_bus_stats():
         "total_errors": stats.get("errors", 0),
         "queue_size": stats.get("queue_size", 0),
         "subscriber_count": stats.get("subscriber_count", {}),
+    }
+
+
+# ═══════════════════════════════════════════════════════════════
+# Phase 3: CRO Dashboard API（供 AI Agent 使用）
+# ═══════════════════════════════════════════════════════════════
+
+def _calc_btc_volatility_1h() -> dict:
+    """計算 BTC 1 小時波動率（基於 Binance K 線）"""
+    klines = list(binance_feed.state.klines)
+    if len(klines) < 4:
+        return {"value": 0.0, "level": "UNKNOWN"}
+
+    # 取最近 4 根 15m K 線 = 1 小時
+    recent = klines[-4:]
+    hi = max(k["h"] for k in recent)
+    lo = min(k["l"] for k in recent)
+    mid = (hi + lo) / 2
+    volatility_pct = ((hi - lo) / mid * 100) if mid > 0 else 0.0
+
+    if volatility_pct >= 5.0:
+        level = "EXTREME"
+    elif volatility_pct >= 3.0:
+        level = "HIGH"
+    elif volatility_pct >= 1.0:
+        level = "MEDIUM"
+    else:
+        level = "LOW"
+
+    return {"value": round(volatility_pct, 2), "level": level}
+
+
+def _calc_market_liquidity() -> dict:
+    """計算 Polymarket 市場流動性狀態"""
+    pm = polymarket_feed.state
+    up_spread = pm.up_spread or 0
+    down_spread = pm.down_spread or 0
+    avg_spread = (up_spread + down_spread) / 2 if (up_spread or down_spread) else 0
+
+    if avg_spread >= 0.05:
+        level = "CRITICAL"
+    elif avg_spread >= 0.03:
+        level = "LOW"
+    elif avg_spread >= 0.015:
+        level = "MEDIUM"
+    else:
+        level = "GOOD"
+
+    return {
+        "up_spread": round(up_spread * 100, 2) if up_spread else None,
+        "down_spread": round(down_spread * 100, 2) if down_spread else None,
+        "avg_spread_pct": round(avg_spread * 100, 2),
+        "liquidity_usd": pm.liquidity,
+        "level": level,
+    }
+
+
+@app.get("/api/cro/stats")
+async def get_cro_stats():
+    """
+    CRO Dashboard API — 供 VPS AI Agent (OpenClaw) 使用
+
+    回傳高層次的聚合決策數據，包含：
+    - 策略績效健康度 (win_rate, drawdown, profit_factor)
+    - 市場狀態 (volatility, liquidity, spread)
+    - 當前交易模式
+    - 建議行動 (advisory)
+
+    AI Agent 應每 30 分鐘 ~ 1 小時呼叫一次此端點。
+    """
+    # 策略績效（來自 SignalGenerator CRO 統計）
+    signal_stats = signal_generator.get_cro_stats()
+
+    # 模擬交易引擎統計
+    sim_stats = sim_engine.get_stats()
+
+    # 市場狀態
+    volatility = _calc_btc_volatility_1h()
+    liquidity = _calc_market_liquidity()
+
+    # 系統健康度
+    components_ok = all(
+        comp._component_state.value == "running"
+        for comp in [binance_feed, polymarket_feed, chainlink_feed]
+    )
+
+    # ── 生成建議 (Advisory) ─────────────────────────────────
+    advisories = []
+
+    # 低勝率警告
+    if signal_stats["win_rate_6h"] < 40 and signal_stats["total_trades_24h"] >= 5:
+        advisories.append({
+            "severity": "WARNING",
+            "type": "ALPHA_DECAY",
+            "message": f"近 6h 勝率僅 {signal_stats['win_rate_6h']}%，建議切換至 conservative 模式",
+            "suggested_action": "SWITCH_MODE",
+            "suggested_value": "conservative",
+        })
+
+    # 高波動警告
+    if volatility["level"] in ("HIGH", "EXTREME"):
+        advisories.append({
+            "severity": "CRITICAL" if volatility["level"] == "EXTREME" else "WARNING",
+            "type": "HIGH_VOLATILITY",
+            "message": f"BTC 1h 波動率 {volatility['value']}% ({volatility['level']})，建議暫停或降級",
+            "suggested_action": "PAUSE_TRADING" if volatility["level"] == "EXTREME" else "SWITCH_MODE",
+            "suggested_value": "pause" if volatility["level"] == "EXTREME" else "conservative",
+        })
+
+    # 流動性危機
+    if liquidity["level"] in ("LOW", "CRITICAL"):
+        advisories.append({
+            "severity": "CRITICAL" if liquidity["level"] == "CRITICAL" else "WARNING",
+            "type": "LOW_LIQUIDITY",
+            "message": f"Polymarket 平均 Spread {liquidity['avg_spread_pct']}%，流動性{liquidity['level']}",
+            "suggested_action": "PAUSE_TRADING",
+            "suggested_value": "pause",
+        })
+
+    # 連敗警告
+    if signal_stats["consecutive_losses"] >= 4:
+        advisories.append({
+            "severity": "WARNING",
+            "type": "LOSING_STREAK",
+            "message": f"連續虧損 {signal_stats['consecutive_losses']} 筆，建議降低倉位或暫停",
+            "suggested_action": "SWITCH_MODE",
+            "suggested_value": "conservative",
+        })
+
+    # 順風期 → 可以考慮激進
+    if (signal_stats["win_rate_6h"] >= 70
+            and signal_stats["total_trades_24h"] >= 5
+            and volatility["level"] in ("LOW", "MEDIUM")
+            and liquidity["level"] in ("GOOD", "MEDIUM")
+            and signal_stats["current_mode"] != "aggressive"):
+        advisories.append({
+            "severity": "INFO",
+            "type": "HOT_STREAK",
+            "message": f"近 6h 勝率 {signal_stats['win_rate_6h']}% 且市場穩定，可考慮升級 aggressive",
+            "suggested_action": "SWITCH_MODE",
+            "suggested_value": "aggressive",
+        })
+
+    return {
+        "timestamp": time.time(),
+        "performance": signal_stats,
+        "simulation": {
+            "balance": sim_stats.get("balance", 0),
+            "total_pnl": sim_stats.get("total_pnl", 0),
+            "open_trades": sim_stats.get("open_trades", 0),
+            "is_running": sim_engine.is_running(),
+        },
+        "market_condition": {
+            "btc_volatility": volatility,
+            "polymarket_liquidity": liquidity,
+            "btc_price": chainlink_feed.state.btc_price,
+        },
+        "system_health": {
+            "all_components_ok": components_ok,
+            "event_bus_running": bus.get_stats().get("running", False),
+        },
+        "advisories": advisories,
+        "advisory_count": len(advisories),
     }
 
 

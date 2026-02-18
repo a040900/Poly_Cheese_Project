@@ -1,0 +1,101 @@
+# AI Agent (OpenClaw) 角色轉型與指令建議書 - Phase 3
+
+## 1. 核心理念：從「微觀操作」到「宏觀指揮」
+
+在 Phase 3 的系統架構中，我們將底層的數學運算與統計優化交還給 Python 演算法核心，讓 AI Agent (OpenClaw) 專注於它最擅長的領域：**情境判斷**、**異常管理** 與 **高層風險控制**。這不是讓 AI「失業」，而是讓它「升職」。
+
+- **舊角色**: Parameter Tuner (參數微調員)
+  - 關注點：RSI 權重是 5 還是 5.5？
+  - 缺點：AI 對高頻統計數值的敏感度不如數學演算法，且反應較慢，容易過度擬合短期數據。
+
+- **新角色**: **Chief Risk Officer (CRO) & Strategy Director (策略總監)**
+  - 關注點：現在是牛市還是熊市？系統是否失效？有無重大新聞風險？
+  - 優勢：利用語義理解能力綜合多源資訊，做出「人」層次的戰略決策，這是純量化模型做不到的。
+
+---
+
+## 2. 三層分工架構 (Layered Architecture)
+
+| 層級 | 負責單元 | 頻率 | 職責 |
+| :--- | :--- | :--- | :--- |
+| **L1: 執行層 (Execution)** | **Python 演算法核心** | 毫秒級 | 接收即時數據，計算技術指標 (RSI, MACD, CVD...)，執行信號生成與訂單撮合，確保最低延遲與最大穩定性。 |
+| **L2: 戰術層 (Tactics)** | **自動回測腳本** | 小時/日級 | 定期跑最佳化回測，微調 `BIAS_WEIGHTS` 參數以適應近期盤勢統計特性，確保指標組合維持最佳狀態。 |
+| **L3: 戰略層 (Strategy)** | **AI Agent (OpenClaw)** | 分鐘/事件級 | 監控市場情緒、宏觀新聞、系統異常，動態切換 **Trading Mode** (積極/平衡/保守/暫停)。這是系統的「大腦」。 |
+
+---
+
+## 3. 給 OpenClaw 的具體指令集 (System Instructions)
+
+請將以下邏輯整合至 OpenClaw 的 System Prompt 或 Workflow 中：
+
+### A. 監控指標 (Inputs to Monitor)
+OpenClaw 不需要關注每一根 K 線的漲跌，而是關注 **聚合狀態 (Aggregated States)**：
+
+1.  **績效健康度 (Performance Health)**:
+    - 來自系統 Dashboard API (`/api/cro/stats` - 待開發)
+    - `win_rate_last_6h` (近 6 小時勝率)
+    - `max_drawdown` (當前最大回撤)
+    - `consecutive_losses` (連續虧損次數)
+    - `profit_factor_24h` (最近 24 小時獲利因子)
+
+2.  **市場寬度 (Market Breadth)**:
+    - `btc_volatility_1h` (BTC 1 小時波動率) - 高波動需避險，低波動適合特定策略
+    - `polymarket_liquidity` (市場流動性深度)
+    - `spread_avg` (平均買賣價差) - 作為市場效率的指標
+
+3.  **外部環境 (External Context)** - *需額外串接*:
+    - 財經日曆 (CPI, FOMC, 非農數據) - 重大數據前避險
+    - 社群情緒 (Twitter/News Sentiment) - 極度貪婪/恐懼時的反向指標
+
+### B. 決策矩陣 (Decision Logic Matrix)
+
+當監測到以下情境時，執行對應行動：
+
+| 情境 (Scenario) | 判斷 (Diagnosis) | **OpenClaw 行動 (Action)** | API 指令 |
+| :--- | :--- | :--- | :--- |
+| **勝率 < 40% (近 6H)** | 策略失效 (Alpha Decay) | 降級為 **Conservative** (保守) 模式，減少開倉，保護本金。 | `POST /api/mode { "mode": "conservative" }` |
+| **波動率爆增 (>5%/1h)** | 市場混亂 / 插針風險 | **暫停交易** (Pause) 2-4 小時，避開洗盤。 | `POST /api/simulation/toggle` (Stop) |
+| **Spread > 3% (持續)** | 流動性枯竭 | **暫停交易**，避免滑價損失。 | `POST /api/simulation/toggle` (Stop) |
+| **勝率 > 70% 且 波動適中** | 順風期 (Hot Streak) | 升級為 **Aggressive** (積極) 模式，放大獲利。 | `POST /api/mode { "mode": "aggressive" }` |
+| **重大新聞發布前 30分** | 消息面風險 (Risk Off) | 提前清倉並切換 **Conservative**，直到數據公佈且市場穩定。 | `POST /api/mode` + 平倉指令 |
+| **一切正常** | 系統穩定 | 維持現狀，僅記錄 Log (Keep Alive)，確認 AI 在線。 | (Log entry only) |
+
+### C. 執行頻率 (Frequency)
+- **建議頻率**: 每 30 分鐘 ~ 1 小時檢查一次。
+- **例外觸發**: 若系統發出 `Drawdown Alert` (回撤警報) 或 `Error` 事件，應立即被喚醒介入。
+
+---
+
+## 4. API 互動範例 (Integration Example)
+
+為了支援上述決策，建議後端提供專用 API endpoint: `GET /api/cro/stats`，回傳精簡的高層次數據。
+
+**Response Payload (給 AI 的輸入):**
+```json
+{
+  "performance": {
+    "win_rate_6h": 0.45,       // 勝率：偏低 -> 策略可能失效，需要調整
+    "drawdown_24h": -0.12,     // 回撤：12% -> 警訊，接近風控紅線
+    "profit_factor": 0.8,      // 盈虧比：虧損中
+    "consecutive_losses": 4    // 連續虧損：4次 -> 心態需冷靜，避免上頭
+  },
+  "market_condition": {
+    "btc_volatility_1h": "medium", // 波動率：中等
+    "polymarket_liquidity": "low", // 流動性：差 -> 滑價風險大，不適合高頻
+    "spread_avg": 2.5              // 價差：2.5% -> 差
+  },
+  "current_mode": "aggressive"     // 當前模式：積極 -> 顯然與當前低勝率低流動性不符，必須修正！
+}
+```
+
+**OpenClaw 的應對決策 (Response):**
+> *"偵測到最近 6 小時勝率低於 50% 且連續虧損增加，且市場流動性不佳 (Spread > 2%)。"*
+> *"當前 'Aggressive' 模式風險過高，策略應轉向防守，以保護剩餘資本。"*
+> **Action**: `SWITCH_TO_CONSERVATIVE`
+
+---
+
+### [結論] 為何這比微調權重更好？
+因為 AI 不具備與量化模型競爭「短期統計準確度」的能力，但它具備理解「整體風險情境」的能力。比起讓 AI 去猜測 RSI 應該重一點還是輕一點，讓它去判斷「現在能不能打仗」更有價值。
+
+透過這種分工，我們讓 Python 做它擅長的 *計算*，讓 AI 做它擅長的 *判斷*，從而最大化整體系統的生存能力與獲利潛力。

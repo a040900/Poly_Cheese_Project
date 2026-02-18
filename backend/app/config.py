@@ -136,10 +136,11 @@ BIAS_WEIGHTS = {
     "ha":     6,   # Heikin-Ashi 連續方向（最多 3 根蠟燭）
     "vwap":   5,   # 價格 vs VWAP
     "rsi":    5,   # RSI 超買/超賣
+    "bb":     5,   # Bollinger Band %B (Phase 3: 波動率維度)
     "poc":    3,   # 價格 vs POC (成交量集中點)
     "walls":  4,   # 買牆 − 賣牆（限制 ±4）
 }
-# 權重總和 = 56；偏差分數 = (原始總和 / 56) * 100，夾緊在 ±100
+# 權重總和 = 61；偏差分數 = (原始總和 / 61) * 100，夾緊在 ±100
 
 # ═══════════════════════════════════════════════════════════════
 # 交易模式定義
@@ -155,7 +156,7 @@ TRADING_MODES = {
         "indicator_weights_multiplier": {
             "ema": 1.2, "obi": 1.0, "macd": 0.8,
             "cvd": 1.2, "ha": 0.6, "vwap": 0.8,
-            "rsi": 0.6, "poc": 0.5, "walls": 1.0,
+            "rsi": 0.6, "bb": 0.6, "poc": 0.5, "walls": 1.0,
         },
     },
     "balanced": {
@@ -168,7 +169,7 @@ TRADING_MODES = {
         "indicator_weights_multiplier": {
             "ema": 1.0, "obi": 1.0, "macd": 1.0,
             "cvd": 1.0, "ha": 1.0, "vwap": 1.0,
-            "rsi": 1.0, "poc": 1.0, "walls": 1.0,
+            "rsi": 1.0, "bb": 1.0, "poc": 1.0, "walls": 1.0,
         },
     },
     "conservative": {
@@ -181,7 +182,7 @@ TRADING_MODES = {
         "indicator_weights_multiplier": {
             "ema": 0.8, "obi": 1.2, "macd": 1.2,
             "cvd": 0.8, "ha": 1.2, "vwap": 1.2,
-            "rsi": 1.5, "poc": 1.0, "walls": 1.2,
+            "rsi": 1.5, "bb": 1.3, "poc": 1.0, "walls": 1.2,
         },
     },
 }
@@ -192,6 +193,9 @@ TRADING_MODES = {
 SIM_INITIAL_BALANCE = float(os.getenv("SIM_INITIAL_BALANCE", "1000.0"))
 SIM_FEE_PCT = 0.001         # 模擬手續費 0.1%（Phase 1 簡化值）
 
+# Phase 3: 信號冷卻期（同方向信號在 N 秒內不重複觸發）
+SIGNAL_COOLDOWN_SECONDS = 120  # 2 分鐘冷卻
+
 # Phase 2: Polymarket 15m 市場浮動手續費（借鏡 NautilusTrader 文件）
 # Buy 端手續費: 0.2% - 1.6%（從 Token 扣除）
 # Sell 端手續費: 0.8% - 3.7%（從 USDC 扣除）
@@ -199,6 +203,13 @@ PM_FEE_BUY_RANGE = (0.002, 0.016)    # Buy 手續費範圍
 PM_FEE_SELL_RANGE = (0.008, 0.037)   # Sell 手續費範圍
 PM_FEE_BUY_DEFAULT = 0.005           # 預設 Buy 手續費 0.5%
 PM_FEE_SELL_DEFAULT = 0.015          # 預設 Sell 手續費 1.5%
+
+# Phase 2.1: 利潤過濾器 (Profit Filter)
+# 開倉前先估算「扣掉手續費+價差後還有沒有賺頭」
+PROFIT_FILTER_ENABLED = True                # 是否啟用利潤過濾器
+PROFIT_FILTER_MAX_SPREAD_PCT = 0.02         # 最大允許 Spread 比例（2%），超過代表流動性差
+PROFIT_FILTER_MIN_PROFIT_RATIO = 1.5        # 預期毛利需為來回手續費的 N 倍才放行
+PROFIT_FILTER_MIN_TRADE_AMOUNT = 1.0        # 最低交易金額 (USDC)，低於此不交易
 
 # ═══════════════════════════════════════════════════════════════
 # 安全設定
