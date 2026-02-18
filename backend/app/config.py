@@ -19,8 +19,8 @@ VERSION = "3.2.0"
 BACKEND_HOST = os.getenv("BACKEND_HOST", "0.0.0.0")
 BACKEND_PORT = int(os.getenv("BACKEND_PORT", "8888"))
 # 反向代理子路徑（如 "/polycheese"），末尾不含 /，直接部署時留空
-# VPS Tailscale Serve 部署時設為 "/polycheese"
-ROOT_PATH = os.getenv("ROOT_PATH", "/polycheese").rstrip("/")
+# VPS Tailscale Serve 部署時在 .env 設為 ROOT_PATH=/polycheese
+ROOT_PATH = os.getenv("ROOT_PATH", "").rstrip("/")
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 DATA_DIR = BASE_DIR / "data"
 LOG_DIR = BASE_DIR / "logs"
