@@ -14,9 +14,13 @@ venv/
 .env
 *.env.local
 
-# 資料庫
+# 資料庫及校準數據
 data/*.db
 data/*.db-journal
+backend/data/*.json
+backend/data/calibration_history/
+*.json
+test_output.txt
 
 # 日誌
 logs/*.log
