@@ -15,7 +15,7 @@ load_dotenv(BASE_DIR / ".env")
 # 系統設定
 # ═══════════════════════════════════════════════════════════════
 APP_NAME = "乳酪のBTC預測室 — Polymarket Intelligent Trading Assistant"
-VERSION = "2.0.0"
+VERSION = "3.2.0"
 BACKEND_HOST = os.getenv("BACKEND_HOST", "0.0.0.0")
 BACKEND_PORT = int(os.getenv("BACKEND_PORT", "8888"))
 # 反向代理子路徑（如 "/polycheese"），末尾不含 /，直接部署時留空
