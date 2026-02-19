@@ -860,6 +860,108 @@ def _calc_market_liquidity() -> dict:
     }
 
 
+@app.get("/api/cro/compact")
+async def get_cro_compact():
+    """
+    🔋 Token 節約版 CRO API — 供 VPS AI Agent 高頻監控使用
+
+    設計目標：將整個系統狀態壓縮至 ~300 tokens 以內。
+    AI Agent 應優先使用此端點，僅在需要深入分析時才呼叫 /api/cro/stats。
+
+    回傳格式：極度精簡的單層 key-value，所有 key 使用縮寫。
+
+    Key 說明:
+      btc   = BTC 價格
+      sig   = 信號方向 (U=BUY_UP, D=SELL_DOWN, N=NEUTRAL)
+      sc    = 信號分數 (-100~+100)
+      mode  = 交易模式 (agg/bal/con/def/ultra)
+      wr6h  = 近6小時勝率 (%)
+      wr24h = 近24小時勝率 (%)
+      pnl   = 總 PnL ($)
+      bal   = 帳戶餘額 ($)
+      open  = 未平倉交易數
+      dd    = 最大回撤 (%)
+      closs = 連續虧損次數
+      vol   = BTC 1h 波動率等級 (L/M/H/X)
+      liq   = 流動性等級 (G/M/L/C)
+      sprd  = 平均 Spread (%)
+      hp    = 系統健康 (1=OK, 0=ERROR)
+      adv   = 建議行動 (HOLD/SWITCH/PAUSE/ALERT)
+      advTo = 建議切換目標模式 (若有)
+    """
+    signal_stats = signal_generator.get_cro_stats()
+    sim_stats = sim_engine.get_stats()
+    volatility = _calc_btc_volatility_1h()
+    liquidity = _calc_market_liquidity()
+
+    components_ok = all(
+        comp._component_state.value == "running"
+        for comp in [binance_feed, polymarket_feed, chainlink_feed]
+    )
+
+    # 信號方向縮寫
+    sig_dir = signal_generator.last_signal or {}
+    dir_map = {"BUY_UP": "U", "SELL_DOWN": "D", "NEUTRAL": "N"}
+    sig_short = dir_map.get(sig_dir.get("direction", "NEUTRAL"), "N")
+
+    # 模式縮寫
+    mode_map = {
+        "ultra_aggressive": "ultra", "aggressive": "agg",
+        "balanced": "bal", "conservative": "con", "defensive": "def",
+    }
+    mode_short = mode_map.get(signal_stats.get("current_mode", "balanced"), "bal")
+
+    # 波動率縮寫
+    vol_map = {"LOW": "L", "MEDIUM": "M", "HIGH": "H", "EXTREME": "X"}
+    vol_short = vol_map.get(volatility.get("level", "MEDIUM"), "M")
+
+    # 流動性縮寫
+    liq_map = {"GOOD": "G", "MEDIUM": "M", "LOW": "L", "CRITICAL": "C"}
+    liq_short = liq_map.get(liquidity.get("level", "MEDIUM"), "M")
+
+    # 快速建議判斷（與 /api/cro/stats 同邏輯，但只回傳最高優先級）
+    adv = "HOLD"
+    adv_to = None
+    wr6h = signal_stats.get("win_rate_6h", 50)
+    trades_24h = signal_stats.get("total_trades_24h", 0)
+    c_losses = signal_stats.get("consecutive_losses", 0)
+
+    if volatility.get("level") == "EXTREME":
+        adv, adv_to = "PAUSE", None
+    elif liquidity.get("level") == "CRITICAL":
+        adv, adv_to = "PAUSE", None
+    elif wr6h < 40 and trades_24h >= 5:
+        adv, adv_to = "SWITCH", "con"
+    elif c_losses >= 4:
+        adv, adv_to = "SWITCH", "con"
+    elif (wr6h >= 70 and trades_24h >= 5
+          and vol_short in ("L", "M") and liq_short in ("G", "M")
+          and mode_short != "agg"):
+        adv, adv_to = "SWITCH", "agg"
+
+    result = {
+        "btc": round(chainlink_feed.state.btc_price or binance_feed.state.mid, 2),
+        "sig": sig_short,
+        "sc": round(sig_dir.get("score", 0), 1),
+        "mode": mode_short,
+        "wr6h": round(wr6h, 1),
+        "wr24h": round(signal_stats.get("win_rate_24h", 0), 1),
+        "pnl": round(sim_stats.get("total_pnl", 0), 2),
+        "bal": round(sim_stats.get("balance", 0), 2),
+        "open": sim_stats.get("open_trades", 0),
+        "dd": round(signal_stats.get("max_drawdown_pct", 0), 1),
+        "closs": c_losses,
+        "vol": vol_short,
+        "liq": liq_short,
+        "sprd": round(liquidity.get("avg_spread_pct", 0), 2),
+        "hp": 1 if components_ok else 0,
+        "adv": adv,
+    }
+    if adv_to:
+        result["advTo"] = adv_to
+
+    return result
+
 @app.get("/api/cro/stats")
 async def get_cro_stats():
     """
