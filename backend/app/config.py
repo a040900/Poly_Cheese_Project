@@ -125,21 +125,21 @@ EMA_LONG = 20
 HA_COUNT = 8                # Heikin Ashi 顯示蠟燭數
 
 # ═══════════════════════════════════════════════════════════════
-# 趨勢偏差評分權重（Phase 3 P1: 真實數據校準 2026-02-18）
+# 趨勢偏差評分權重（Phase 3 Step 13: 真實數據校準 2026-02-19）
 # ═══════════════════════════════════════════════════════════════
 # 每個指標對最終綜合趨勢分數的最大貢獻度
-# 校準方法: Random Search (200) + Hill Climbing (100)
-# 校準數據: Binance BTCUSDT 1m K 線 16h (931 筆真實快照)
-# 校準結果: Composite=0.725 | Sharpe=103.18 | 勝率=70.6% | 17 筆交易
+# 校準數據: marketprice_(1).db (3 Days Real Data, 2026-02-16 ~ 19)
+# 校準結果: PnL +19.1% | WinRate=48.3% | Trades=89
+# 策略風格: 高波動適應型 (High MACD Momentum + High RSI Reversion)
 BIAS_WEIGHTS = {
-    "ema":    6,   # EMA 交叉（連續函數）
+    "ema":    5,   # EMA 交叉（降低權重，減少滯後）
     "obi":    4,   # 訂單簿失衡
-    "macd":   3,   # MACD Histogram（幅度化）
+    "macd":  10,   # MACD Histogram（大幅提升動能權重）★ 新核心
     "cvd":    5,   # CVD 5 分鐘方向
-    "ha":    12,   # Heikin-Ashi 連續方向 ★ 校準 MVP
+    "ha":    12,   # Heikin-Ashi 連續方向 ★ 趨勢核心
     "vwap":   7,   # 價格 vs VWAP
-    "rsi":    5,   # RSI 超買/超賣（極端加強）
-    "bb":     8,   # Bollinger Band %B（波動率維度）★ 校準重要
+    "rsi":    8,   # RSI 超買/超賣（提升靈敏度）
+    "bb":     8,   # Bollinger Band %B（波動率維度）
     "poc":    3,   # 價格 vs POC（成交量集中點）
     "walls":  1,   # 買牆 − 賣牆
 }
