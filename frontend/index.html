@@ -43,6 +43,9 @@
         </div>
 
         <div class="navbar-actions">
+            <button class="btn btn-primary btn-sm" id="btn-ai-settings" title="AI 設定">
+                🤖 AI 設定
+            </button>
             <button class="btn btn-icon" id="btn-theme-toggle" title="切換主題">
                 <span class="theme-icon">🌙</span>
             </button>
@@ -84,6 +87,22 @@
                 <div class="metric-label">當前信號</div>
                 <div class="metric-value signal-neutral" id="val-signal">NEUTRAL</div>
                 <div class="metric-sub" id="val-signal-score">分數: --</div>
+            </div>
+            <div class="metric-card metric-sentiment" id="card-sentiment">
+                <div class="metric-label">🎭 市場情緒</div>
+                <div class="metric-value" id="val-sentiment-label">--</div>
+                <div class="sentiment-bar-container">
+                    <div class="sentiment-bar" id="sentiment-bar">
+                        <div class="sentiment-bar-fill" id="sentiment-bar-fill"></div>
+                        <div class="sentiment-bar-marker" id="sentiment-bar-marker"></div>
+                    </div>
+                    <div class="sentiment-bar-labels">
+                        <span>恐懼</span>
+                        <span>中性</span>
+                        <span>貪婪</span>
+                    </div>
+                </div>
+                <div class="metric-sub" id="val-sentiment-detail">溢價: -- | 敏感度: --</div>
             </div>
         </section>
 
@@ -250,6 +269,7 @@
                 <button class="tab-btn" data-tab="tab-backtest" id="tabBtn-backtest">🔬 回測引擎</button>
                 <button class="tab-btn" data-tab="tab-ai" id="tabBtn-ai">🤖 AI 建議</button>
                 <button class="tab-btn" data-tab="tab-health" id="tabBtn-health">🩺 元件健康</button>
+                <button class="tab-btn" data-tab="tab-supervisor" id="tabBtn-supervisor">🛡️ 監控台</button>
             </div>
 
             <!-- ── Tab: 績效報告 ─────────────────────────────── -->
@@ -426,6 +446,80 @@
                     <button class="btn btn-sm btn-outline" id="btn-refresh-health">🔄 刷新健康狀態</button>
                 </div>
             </div>
+
+            <!-- ── Tab: Phase 4 監控台 ──────────────────────────── -->
+            <div class="tab-content" id="tab-supervisor">
+                <!-- 狀態卡片列 -->
+                <div class="sv-status-row" id="sv-status-row">
+                    <div class="sv-card">
+                        <div class="sv-card-icon">🧭</div>
+                        <div class="sv-card-body">
+                            <span class="sv-card-label">AI Navigator</span>
+                            <span class="sv-card-value" id="sv-navigator">--</span>
+                        </div>
+                    </div>
+                    <div class="sv-card">
+                        <div class="sv-card-icon">🔐</div>
+                        <div class="sv-card-body">
+                            <span class="sv-card-label">授權模式</span>
+                            <span class="sv-card-value" id="sv-auth-mode">--</span>
+                        </div>
+                    </div>
+                    <div class="sv-card">
+                        <div class="sv-card-icon" id="sv-tg-icon">🤖</div>
+                        <div class="sv-card-body">
+                            <span class="sv-card-label">Telegram Bot</span>
+                            <span class="sv-card-value" id="sv-tg-status">--</span>
+                        </div>
+                    </div>
+                    <div class="sv-card">
+                        <div class="sv-card-icon">📋</div>
+                        <div class="sv-card-body">
+                            <span class="sv-card-label">待審提案</span>
+                            <span class="sv-card-value sv-highlight" id="sv-pending">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 統計看板 -->
+                <div class="sv-stats-grid" id="sv-stats-grid">
+                    <div class="sv-stat"><span class="sv-stat-label">已建立</span><span class="sv-stat-value"
+                            id="sv-total-created">0</span></div>
+                    <div class="sv-stat sv-stat-ok"><span class="sv-stat-label">已核准</span><span class="sv-stat-value"
+                            id="sv-total-approved">0</span></div>
+                    <div class="sv-stat sv-stat-bad"><span class="sv-stat-label">已拒絕</span><span class="sv-stat-value"
+                            id="sv-total-rejected">0</span></div>
+                    <div class="sv-stat"><span class="sv-stat-label">已過期</span><span class="sv-stat-value"
+                            id="sv-total-expired">0</span></div>
+                    <div class="sv-stat sv-stat-warn"><span class="sv-stat-label">自動放行</span><span class="sv-stat-value"
+                            id="sv-total-auto">0</span></div>
+                    <div class="sv-stat"><span class="sv-stat-label">已阻擋</span><span class="sv-stat-value"
+                            id="sv-total-blocked">0</span></div>
+                </div>
+
+                <!-- 提案歷史列表 -->
+                <div class="sv-history-section">
+                    <h3 class="chart-title">📜 提案歷史</h3>
+                    <div class="sv-history-table" id="sv-history-table">
+                        <div class="sv-history-header">
+                            <span>ID</span>
+                            <span>動作</span>
+                            <span>信心度</span>
+                            <span>優先級</span>
+                            <span>狀態</span>
+                            <span>來源</span>
+                            <span>時間</span>
+                        </div>
+                        <div class="sv-history-body" id="sv-history-body">
+                            <div class="sv-history-empty">尚無提案記錄</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel-footer">
+                    <button class="btn btn-sm btn-outline" id="btn-refresh-supervisor">🔄 刷新監控台</button>
+                </div>
+            </div>
         </section>
 
         <!-- ── 底部控制列 ─────────────────────────────────── -->
@@ -472,6 +566,56 @@
     </main>
 
     <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- AI 設定彈窗 (New) -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="modal-overlay" id="modal-ai-settings" style="display: none;">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>🤖 AI 監控設定</h3>
+                <button class="btn btn-icon modal-close" id="modal-ai-close">✕</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-instruction">
+                    啟用後端 AI 監控，直接呼叫 OpenAI API 進行分析。<br>
+                    <small>可替代外部 Agent 以節省 Token 並集中管理。</small>
+                </p>
+
+                <div class="form-group">
+                    <label class="form-label">
+                        <input type="checkbox" id="ai-enabled"> 啟用 AI 監控 (每 15 分鐘)
+                    </label>
+                </div>
+
+                <div class="form-group">
+                    <label>OpenAI API Key</label>
+                    <input type="password" id="ai-api-key" class="input-text" placeholder="sk-..." autocomplete="off">
+                    <small style="color: #666;">若不修改請留空。支援兼容 API。</small>
+                </div>
+
+                <div class="form-group">
+                    <label>Base URL</label>
+                    <input type="text" id="ai-base-url" class="input-text" placeholder="https://api.openai.com/v1">
+                </div>
+
+                <div class="form-group">
+                    <label>Model Name</label>
+                    <input type="text" id="ai-model" class="input-text" placeholder="gpt-4-turbo">
+                </div>
+
+                <div class="form-group">
+                    <label>監控間隔 (秒)</label>
+                    <input type="number" id="ai-interval" class="input-text" value="900" min="300">
+                </div>
+
+                <div class="form-actions" style="margin-top: 20px; text-align: right;">
+                    <span id="ai-status-msg" style="margin-right: 10px; font-size: 0.9em;"></span>
+                    <button class="btn btn-primary" id="btn-save-ai">儲存並重啟 AI</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
     <!-- 安全密碼驗證彈窗 -->
     <!-- ═══════════════════════════════════════════════════════ -->
     <div class="modal-overlay" id="modal-password" style="display: none;">
@@ -509,7 +653,7 @@
             <span id="footer-time">--</span>
         </div>
         <div class="footer-right">
-            <span>v3.2.0</span>
+            <span>v4.0.0</span>
         </div>
     </footer>
 

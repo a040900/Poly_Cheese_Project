@@ -25,3 +25,6 @@ py-clob-client>=0.34.0
 # ── 資料分析（未來擴展用）────────────────────────────────────
 # pandas>=2.0.0
 # numpy>=1.24.0
+
+# ── Telegram Bot（Phase 4: HITL 遠端審核）────────────────────
+python-telegram-bot>=21.0

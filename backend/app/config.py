@@ -146,6 +146,26 @@ BIAS_WEIGHTS = {
 # 權重總和 = 54；偏差分數 = (原始總和 / 54) * 100，夾緊在 ±100
 
 # ═══════════════════════════════════════════════════════════════
+# Phase 5: 情緒因子設定 (Sentiment Factor — Hybrid Decision Engine)
+# ═══════════════════════════════════════════════════════════════
+# 利用 Polymarket 合約價格與 Binance 技術面的「乖離」來量化市場情緒。
+# 當 Polymarket 定價遠超技術面合理機率 → 貪婪 (FOMO)
+# 當 Polymarket 定價遠低於技術面合理機率 → 恐懼 (Panic)
+SENTIMENT_CONFIG = {
+    # 極端情緒閾值：超過此值才觸發衰減/放大
+    "extreme_threshold": 60,       # |sentiment_score| > 60 才介入
+
+    # 衰減上限：即使極度貪婪，最多只把分數壓到原始的 N%
+    "max_decay_pct": 0.10,         # 最多壓到原始的 10%（不會完全歸零）
+
+    # 反向增益上限：極度恐慌時，最多放大原始分數的 N 倍
+    "max_boost_multiplier": 1.3,   # 最多 1.3 倍（不會無限放大）
+
+    # 合理機率的 Sigmoid 斜率（越大 → 隱含機率從 0→1 變化越陡）
+    "fair_prob_steepness": 8.0,    # 控制 BTC 距離目標的敏感度
+}
+
+# ═══════════════════════════════════════════════════════════════
 # 交易模式定義（Phase 3 P1: 5 級連續光譜）
 # ═══════════════════════════════════════════════════════════════
 # 等級排列: defensive < conservative < balanced < aggressive < ultra_aggressive
@@ -158,6 +178,7 @@ TRADING_MODES = {
         "max_position_pct": 0.40,    # 單筆最大倉位 40%
         "stop_loss_pct": 0.20,       # 寬止損
         "take_profit_pct": 0.25,     # 高止盈
+        "sentiment_sensitivity": 0.0,  # Phase 5: 不受情緒影響（追動能）
         "indicator_weights_multiplier": {
             "ema": 1.5, "obi": 0.8, "macd": 0.6,
             "cvd": 1.5, "ha": 0.4, "vwap": 0.5,
@@ -172,6 +193,7 @@ TRADING_MODES = {
         "max_position_pct": 0.30,
         "stop_loss_pct": 0.15,
         "take_profit_pct": 0.20,
+        "sentiment_sensitivity": 0.3,  # Phase 5: 輕微情緒過濾
         "indicator_weights_multiplier": {
             "ema": 1.2, "obi": 0.9, "macd": 0.8,
             "cvd": 1.2, "ha": 0.7, "vwap": 0.8,
@@ -186,6 +208,7 @@ TRADING_MODES = {
         "max_position_pct": 0.20,
         "stop_loss_pct": 0.10,
         "take_profit_pct": 0.15,
+        "sentiment_sensitivity": 0.6,  # Phase 5: 中度情緒過濾
         "indicator_weights_multiplier": {
             "ema": 1.0, "obi": 1.0, "macd": 1.0,
             "cvd": 1.0, "ha": 1.0, "vwap": 1.0,
@@ -200,6 +223,7 @@ TRADING_MODES = {
         "max_position_pct": 0.12,
         "stop_loss_pct": 0.07,
         "take_profit_pct": 0.12,
+        "sentiment_sensitivity": 1.0,  # Phase 5: 全力情緒過濾
         "indicator_weights_multiplier": {
             "ema": 0.8, "obi": 1.2, "macd": 1.2,
             "cvd": 0.8, "ha": 1.2, "vwap": 1.2,
@@ -214,6 +238,7 @@ TRADING_MODES = {
         "max_position_pct": 0.08,
         "stop_loss_pct": 0.04,
         "take_profit_pct": 0.08,
+        "sentiment_sensitivity": 1.0,  # Phase 5: 全力情緒過濾
         "indicator_weights_multiplier": {
             "ema": 0.6, "obi": 1.5, "macd": 1.5,
             "cvd": 0.6, "ha": 1.5, "vwap": 1.5,
@@ -332,3 +357,70 @@ PASSWORD_EXPIRY = 300        # 密碼有效期（秒）
 # ═══════════════════════════════════════════════════════════════
 REFRESH_INTERVAL = 5         # 前端刷新間隔（秒）
 WS_HEARTBEAT = 30           # WebSocket 心跳間隔（秒）
+
+# ═══════════════════════════════════════════════════════════════
+# AI 監控設定（自定義 OpenAI API） - Phase 3 P1 (User Request)
+# ═══════════════════════════════════════════════════════════════
+# 改由後端直接呼叫 OpenAI API 進行系統分析與建議
+# 避免外部 Agent 頻繁呼叫導致 Token 浪費
+AI_MONITOR_ENABLED = os.getenv("AI_MONITOR_ENABLED", "false").lower() == "true"
+AI_MONITOR_INTERVAL = int(os.getenv("AI_MONITOR_INTERVAL", "900"))  # 15 分鐘
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4-turbo")
+
+# ═══════════════════════════════════════════════════════════════
+# Phase 4: Hybrid Intelligence & Collaborative Architecture
+# ═══════════════════════════════════════════════════════════════
+
+# ── 導航員選擇 (Navigator Selection) ──────────────────────────
+# 決定系統的 AI 戰略顧問來源。
+# 注意：此設定影響的是「控制平面」(誰能下指令)，
+#       「資料平面」(讀取數據的 API) 不受影響，永遠開放。
+#
+# 可選值:
+#   "openclaw"  — OpenClaw 官方雲端大腦 (外部 AI)
+#   "internal"  — 使用者自備 API Key 的內建 AI 引擎
+#   "none"      — 純演算法模式，不接受任何 AI 指令
+AI_NAVIGATOR = os.getenv("AI_NAVIGATOR", "internal")
+
+# ── 授權模式 (Authorization Mode) ─────────────────────────────
+# 定義 AI 導航員對系統的操作權限等級。
+#
+# 可選值:
+#   "auto"      — God Mode: AI 建議直接執行 (高頻/夜間適用)
+#   "hitl"      — Supervisor Mode: AI 僅能提案，需人類核准
+#   "monitor"   — Monitor Only: AI 僅提供分析報告，不介入操作
+AUTHORIZATION_MODE = os.getenv("AUTHORIZATION_MODE", "hitl")
+
+# ── 提案佇列設定 (Proposal Queue) ─────────────────────────────
+# HITL 模式下，AI 的操作建議會進入提案佇列等待人類審核。
+PROPOSAL_QUEUE_CONFIG = {
+    # 提案過期時間（秒）— 超時未審核自動標記 EXPIRED
+    "expiry_seconds": 600,          # 10 分鐘
+
+    # 佇列最大容量 — 滿了之後最舊的未處理提案自動過期
+    "max_queue_size": 50,
+
+    # 緊急提案自動執行 — HITL 模式下，若 AI 信心度 >= 此值
+    # 且 action 為 PAUSE_TRADING 或 risk_level 為 CRITICAL，
+    # 則繞過人工審核直接執行（安全閥設計）
+    "emergency_auto_approve_confidence": 95,
+
+    # 緊急行動白名單 — 這些 action 在滿足信心度門檻時可自動執行
+    "emergency_actions": ["PAUSE_TRADING"],
+
+    # 提案歷史保留數量（已處理的提案保留多少筆供查詢）
+    "history_retention": 200,
+}
+
+# ── Telegram Bot 設定 ─────────────────────────────────────────
+# 透過 Telegram Bot 進行 HITL 遠端審核。
+# Token 和 Chat ID 可在運行後透過 API 動態設定。
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+TELEGRAM_ENABLED = os.getenv("TELEGRAM_ENABLED", "false").lower() == "true"
+TELEGRAM_NOTIFY_ON_PROPOSAL = True     # 新提案時推播通知
+TELEGRAM_NOTIFY_ON_EMERGENCY = True    # 緊急安全閥觸發時推播
+TELEGRAM_NOTIFY_ON_TRADE = True        # 交易執行時推播
+TELEGRAM_HOURLY_REPORT = False         # 每小時簡報（預設關閉）

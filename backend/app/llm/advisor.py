@@ -32,7 +32,7 @@ class LLMAdvisor:
 
     VALID_MODES = {"aggressive", "balanced", "conservative"}
     VALID_ACTIONS = {"HOLD", "SWITCH_MODE", "PAUSE_TRADING", "CONTINUE"}
-    VALID_RISK_LEVELS = {"LOW", "MEDIUM", "HIGH"}
+    VALID_RISK_LEVELS = {"LOW", "MEDIUM", "HIGH", "CRITICAL"}
 
     def __init__(self):
         self._advice_history: list[dict] = []

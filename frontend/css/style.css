@@ -370,7 +370,7 @@ body::before {
 /* ── 頂部指標卡片 ─────────────────────────────────────────── */
 .metrics-row {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     gap: 1rem;
     margin-bottom: 1.25rem;
 }
@@ -409,6 +409,79 @@ body::before {
 
 .metric-signal::before {
     background: linear-gradient(90deg, var(--accent-primary), #fbbf24);
+}
+
+.metric-sentiment::before {
+    background: linear-gradient(90deg, #ef4444, #f59e0b, #22c55e, #f59e0b, #ef4444);
+}
+
+/* ── Phase 5: 情緒指示器 ───────────────────────────────────── */
+.sentiment-bar-container {
+    margin: 0.5rem 0 0.3rem;
+}
+
+.sentiment-bar {
+    position: relative;
+    width: 100%;
+    height: 8px;
+    border-radius: 4px;
+    background: linear-gradient(90deg,
+            #ef4444 0%,
+            #f97316 25%,
+            #94a3b8 50%,
+            #4ade80 75%,
+            #22c55e 100%);
+    overflow: visible;
+}
+
+.sentiment-bar-fill {
+    display: none;
+}
+
+.sentiment-bar-marker {
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 14px;
+    height: 14px;
+    background: var(--text-primary);
+    border: 2px solid var(--bg-card);
+    border-radius: 50%;
+    box-shadow: 0 0 6px rgba(0, 0, 0, 0.5);
+    transition: left 0.5s ease;
+    left: 50%;
+    z-index: 2;
+}
+
+.sentiment-bar-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.6rem;
+    color: var(--text-muted);
+    margin-top: 0.15rem;
+}
+
+/* 情緒標籤顏色 */
+.sentiment-extreme-greed {
+    color: #ef4444 !important;
+    text-shadow: 0 0 8px rgba(239, 68, 68, 0.3);
+}
+
+.sentiment-greed {
+    color: #f97316 !important;
+}
+
+.sentiment-neutral {
+    color: var(--text-secondary) !important;
+}
+
+.sentiment-fear {
+    color: #60a5fa !important;
+}
+
+.sentiment-extreme-fear {
+    color: #3b82f6 !important;
+    text-shadow: 0 0 8px rgba(59, 130, 246, 0.3);
 }
 
 .metric-card:hover {
@@ -1829,5 +1902,292 @@ body::before {
     to {
         opacity: 1;
         transform: translateY(0);
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Phase 4: Supervisor 監控台
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── 狀態卡片列 ───────────────────────────────────────────── */
+.sv-status-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.85rem;
+    margin-bottom: 1.25rem;
+}
+
+.sv-card {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 1rem 1.15rem;
+    transition: all var(--transition-fast);
+}
+
+.sv-card:hover {
+    border-color: var(--border-color-hover);
+    transform: translateY(-1px);
+}
+
+.sv-card-icon {
+    font-size: 1.6rem;
+    flex-shrink: 0;
+    width: 2.2rem;
+    text-align: center;
+}
+
+.sv-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+}
+
+.sv-card-label {
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.sv-card-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sv-card-value.sv-highlight {
+    color: var(--accent-primary);
+    font-size: 1.15rem;
+}
+
+/* Navigator / AuthMode 色彩 */
+.sv-card-value.sv-nav-internal {
+    color: var(--color-info);
+}
+
+.sv-card-value.sv-nav-openclaw {
+    color: #a78bfa;
+}
+
+.sv-card-value.sv-nav-none {
+    color: var(--text-muted);
+}
+
+.sv-card-value.sv-auth-auto {
+    color: var(--color-bullish);
+}
+
+.sv-card-value.sv-auth-hitl {
+    color: var(--color-warning);
+}
+
+.sv-card-value.sv-auth-monitor {
+    color: var(--color-info);
+}
+
+/* Telegram 狀態燈 */
+.sv-card-value.sv-tg-running {
+    color: var(--color-bullish);
+}
+
+.sv-card-value.sv-tg-offline {
+    color: var(--text-muted);
+}
+
+/* ── 統計看板 ─────────────────────────────────────────────── */
+.sv-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 0.65rem;
+    margin-bottom: 1.25rem;
+}
+
+.sv-stat {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 0.7rem 0.6rem;
+    text-align: center;
+    transition: all var(--transition-fast);
+}
+
+.sv-stat:hover {
+    border-color: var(--border-color-hover);
+}
+
+.sv-stat-label {
+    display: block;
+    font-size: 0.62rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin-bottom: 0.2rem;
+}
+
+.sv-stat-value {
+    display: block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.sv-stat-ok .sv-stat-value {
+    color: var(--color-bullish);
+}
+
+.sv-stat-bad .sv-stat-value {
+    color: var(--color-bearish);
+}
+
+.sv-stat-warn .sv-stat-value {
+    color: var(--color-warning);
+}
+
+/* ── 提案歷史表格 ─────────────────────────────────────────── */
+.sv-history-section {
+    margin-bottom: 0.5rem;
+}
+
+.sv-history-table {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.sv-history-header,
+.sv-history-row {
+    display: grid;
+    grid-template-columns: 0.8fr 1.2fr 0.8fr 0.8fr 1fr 0.8fr 1.2fr;
+    padding: 0.55rem 0.75rem;
+    font-size: 0.72rem;
+    align-items: center;
+}
+
+.sv-history-header {
+    background: var(--bg-elevated);
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    font-size: 0.65rem;
+}
+
+.sv-history-row {
+    border-top: 1px solid var(--border-color);
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 500;
+    transition: background var(--transition-fast);
+}
+
+.sv-history-row:hover {
+    background: var(--bg-card-hover);
+}
+
+.sv-history-empty {
+    padding: 2rem;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.82rem;
+}
+
+/* 提案狀態標籤 */
+.sv-badge {
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 0.12rem 0.5rem;
+    border-radius: 100px;
+    display: inline-block;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.sv-badge-approved {
+    background: rgba(34, 197, 94, 0.15);
+    color: var(--color-bullish);
+}
+
+.sv-badge-rejected {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--color-bearish);
+}
+
+.sv-badge-expired {
+    background: rgba(148, 163, 184, 0.15);
+    color: var(--text-muted);
+}
+
+.sv-badge-auto_approved {
+    background: rgba(251, 191, 36, 0.15);
+    color: var(--color-warning);
+}
+
+.sv-badge-pending {
+    background: rgba(59, 130, 246, 0.15);
+    color: var(--color-info);
+}
+
+/* 優先級標籤 */
+.sv-priority {
+    font-size: 0.68rem;
+    font-weight: 600;
+}
+
+.sv-priority-critical {
+    color: var(--color-bearish);
+}
+
+.sv-priority-high {
+    color: var(--color-warning);
+}
+
+.sv-priority-normal {
+    color: var(--text-secondary);
+}
+
+.sv-priority-low {
+    color: var(--text-muted);
+}
+
+/* ── Phase 4 響應式 ───────────────────────────────────────── */
+@media (max-width: 1200px) {
+    .sv-status-row {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .sv-stats-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .sv-status-row {
+        grid-template-columns: 1fr;
+    }
+
+    .sv-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .sv-history-header,
+    .sv-history-row {
+        grid-template-columns: 0.6fr 1fr 0.7fr 0.8fr;
+        font-size: 0.68rem;
+    }
+
+    .sv-history-header span:nth-child(n+5),
+    .sv-history-row span:nth-child(n+5) {
+        display: none;
     }
 }

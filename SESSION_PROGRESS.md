@@ -19,9 +19,37 @@
 
 ### ✅ Phase 2 已完成 (v2.0.0 Stable)
 
-#### ✅ Phase 2.1 利潤過濾器 (2026-02-18 v2.1.0)
+#### ✅ Phase 5 混合決策引擎 (Hybrid Decision Engine) (2026-02-20)
 
-1. **利潤過濾器 (Profit Filter)** 💰
+**核心機制：漸進式情緒敏感度 (Sentiment Sensitivity)**
+- **問題**：純技術指標可能導致在 FOMO 高點追多，或在極度恐慌低點追空。
+- **解法**：利用 Polymarket 合約價格（散戶情緒）與 Binance 價格距離目標的「技術面合理機率」進行比對，計算出 **乖離率 (Premium/Sentiment Score)**。
+- **模式差異化**：
+  - `ultra_aggressive` (敏感度 0.0)：完全不受情緒影響，專注捕捉突破動能。
+  - `aggressive` (敏感度 0.3)：輕微過濾。
+  - `balanced` (敏感度 0.6)：中度過濾。
+  - `conservative` / `defensive` (敏感度 1.0)：嚴格過濾。極度貪婪時，看多分數最多衰減 90%；極度恐慌時，逆勢看多分數最多放大 1.3 倍。
+
+**實作細節**：
+1. **`app/config.py`**:
+   - 新增 `SENTIMENT_CONFIG` (極端閾值 60, 最大衰減 10%, 最大放大 1.3x, Sigmoid 斜率 8.0)。
+   - 5 個交易模式各加入 `sentiment_sensitivity` 參數。
+2. **`app/strategy/signal_generator.py`**:
+   - 新增 `_calculate_market_sentiment()`: 使用 Sigmoid 轉換 BTC 價格距離為合理機率，對比 Polymarket 定價得出 `sentiment_score` (-100~+100) 與情緒標籤 (EXTREME_GREED 等)。
+   - 新增 `_parse_strike_price()`: 從合約標題提取目標價。
+   - 新增 `_apply_sentiment_adjustment()`: 根據信號與情緒是否同向，執行「同向衰減」或「逆向放大」的數學轉換。
+   - 修改 `generate_signal()` 接受 `pm_state`，在冷卻期前套用情緒調整。
+3. **`app/main.py`**:
+   - WebSocket 廣播 `build_dashboard_data()` 中加入 `sentiment`, `raw_score`, `sentiment_adjustment` 等欄位。
+4. **前端 UI (`app.js`, `style.css`, `index.html`)**:
+   - 新增「🎭 市場情緒」獨立卡片。
+   - 實作漸變色條與浮動指針，直觀顯示情緒落點。
+   - 顯示「溢價百分比」與當前模式的「情緒敏感度」。
+   - 信號分數中顯示調整前/後的差異 (例：`+9.3 (原 +50.0)`)。
+
+---
+
+#### ✅ Phase 2.1 利潤過濾器 (2026-02-18 v2.1.0)
    - **`config.py`**: 新增 4 項設定參數
      - `PROFIT_FILTER_ENABLED`: 開關 (預設開啟)
      - `PROFIT_FILTER_MAX_SPREAD_PCT`: 最大允許 Spread 2%
@@ -648,3 +676,200 @@ Phase 3 P1 — 利用回測引擎大規模搜索最佳 `BIAS_WEIGHTS` 指標權�
 ---
 
 **乳酪のBTC預測室 v3.2.0 (Phase 3 P2: Risk Management)** 🚀🧀
+
+---
+
+## 📅 Session Log: 2026-02-19 22:00 ~ 22:20 (Phase 3 P1: Custom LLM Integration)
+
+### 🎯 本次 Session 目標
+整合使用者自定義的 OpenAI-compatible API (LLM)，將外部 AI Agent 功能內建化，並提供 Web UI 進行設定與切換。
+
+### ✅ 完成事項
+
+#### 1. 內建 AI 引擎 (Internal AI Engine) 🧠
+- **模組**: `backend/app/llm/engine.py`
+- **功能**:
+  - 取代外部 Agent 腳本，直接由後端定期 (預設 15 分鐘) 呼叫 LLM API。
+  - 使用 `prompt_builder` 生成系統快照。
+  - 將 LLM 回應餵給 `llm_advisor` 執行建議 (模式切換/風險管控)。
+  - 支援 `config.AI_MONITOR_ENABLED` 開關。
+
+#### 2. 配置與 API 整合 🔧
+- **`config.py`**:
+  - 新增 `AI_MONITOR_ENABLED`, `AI_MONITOR_INTERVAL`。
+  - 新增 `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`。
+- **`main.py`**:
+  - 整合 `ai_engine` 生命週期 (Startup/Shutdown)。
+  - 新增 `/api/settings/ai` (GET/POST) 用於前端動態設定。
+
+#### 3. 前端 Web UI (Dashboard) 🎨
+- **Navbar**: 新增「🤖 AI 設定」按鈕。
+- **Settings Modal**:
+  - 啟用/停用開關。
+  - API Key 輸入框 (支援密碼掩碼/留空不修改)。
+  - Base URL & Model 設定。
+  - 狀態顯示 (Running/Stopped)。
+- **交互邏輯**:
+  - 即時儲存設定並重啟後端 AI 引擎。
+  - Toast 通知操作結果。
+
+### 修改檔案清單
+| 檔案 | 改動類型 |
+| :--- | :--- |
+| `backend/app/config.py` | 新增 AI 相關配置參數 |
+| `backend/app/llm/engine.py` | ✨ 新增 — 內建 AI 輪詢引擎 |
+| `backend/app/main.py` | 整合 Engine 生命週期與 Settings API |
+| `frontend/index.html` | 新增 AI 設定按鈕與 Modal |
+| `frontend/js/app.js` | 新增 Modal 控制與 API 串接邏輯 |
+
+### 📦 Git 提交記錄 (Pending)
+- `feat(phase3): implement internal AI engine with custom OpenAI API support`
+- `feat(ui): add AI settings modal for dynamic configuration`
+
+---
+
+## 📅 Session Log: 2026-02-19 22:46 ~ 22:57 (AI Engine Full Integration Test)
+
+### 🎯 本次 Session 目標
+對上一次新增的**內建 AI 引擎** (Internal AI Engine) 功能進行完整性執行測試。
+
+### ✅ 測試結果：全部通過 🎉
+
+#### 測試腳本
+- **檔案**: `backend/tests/test_ai_engine_full.py`
+- **用法**:
+  - `python tests/test_ai_engine_full.py --unit` — 僅單元測試（不需後端）
+  - `python tests/test_ai_engine_full.py --api` — 僅 API 測試（需後端運行）
+  - `python tests/test_ai_engine_full.py` — 全部測試
+
+#### 測試項目與結果
+
+| 測試群組 | 項目數 | 結果 | 說明 |
+|----------|--------|------|------|
+| T1: Config 設定驗證 | 6/6 | ✅ | AI_MONITOR_*, OPENAI_* 全部正確定義 |
+| T2: AIEngine 模組載入 | 12/12 | ✅ | 類別繼承、方法存在性、內部屬性全通過 |
+| T3: PromptBuilder 快照 | 6/6 | ✅ | 上下文生成 + 4 種 focus 模式 Prompt 皆正確 |
+| T4: LLMAdvisor 建議處理 | 13/13 | ✅ | 格式驗證、模式切換、權重調整、查詢方法 |
+| T5: E2E 模擬 | 6/6 | ✅ | HOLD/SWITCH_MODE/PAUSE_TRADING/權重調整 |
+| T6: Engine 生命週期 | 11/11 | ✅ | start/stop、缺 key 保護、System Prompt、Mock API |
+| T7: REST API 端點 | 12/12 | ✅ | GET/POST /api/settings/ai、/api/llm/* 全系列 |
+| **總計** | **66/66** | **✅** | **0 失敗** |
+
+#### 詳細測試內容
+
+##### T1: Config 設定驗證
+- `AI_MONITOR_ENABLED`: bool, 預設 False (透過 env 啟用)
+- `AI_MONITOR_INTERVAL`: int, 預設 900s (15 分鐘)
+- `OPENAI_API_KEY`: 支援 env 覆蓋, 掩碼顯示
+- `OPENAI_BASE_URL`: 預設 `https://api.openai.com/v1`
+- `OPENAI_MODEL`: 預設 `gpt-4-turbo`
+
+##### T4: Advisor 建議處理 (重點)
+- ✅ 合法建議 → `status: received`
+- ✅ 無效模式 (`yolo_mode`) → `status: rejected`
+- ✅ 缺少必要欄位 → `status: rejected`
+- ✅ 超範圍 confidence (150) → `status: rejected`
+- ✅ 無效 action (`YOLO`) → `status: rejected`
+- ✅ 模式切換 → `set_mode()` 正確呼叫
+- ✅ 權重調整 → 限制在 1-20 範圍
+- ✅ `get_last_advice()` / `get_stats()` 查詢正常
+
+##### T6: Engine 生命週期
+- ✅ `AI_MONITOR_ENABLED=False` → 不啟動
+- ✅ 缺少 `OPENAI_API_KEY` → 不啟動
+- ✅ 有效 Key → 成功啟動背景任務
+- ✅ `stop()` → 正確取消任務
+- ✅ System Prompt 包含 JSON 格式要求、交易模式選項、BTC 分析指引
+- ✅ Markdown code block 清理邏輯正確
+
+##### T7: REST API 端點
+| API 端點 | 方法 | 狀態 |
+|----------|------|------|
+| `/api/settings/ai` | GET | ✅ 200 — 回傳 6 欄位 (enabled/api_key/base_url/model/interval/status) |
+| `/api/settings/ai` | POST | ✅ 200 — 更新設定 + 引擎重啟 + 還原驗證 |
+| `/api/settings/ai` | GET | ✅ API Key 掩碼 (`***xxxx`) 安全顯示 |
+| `/api/llm/context` | GET | ✅ 200 — 結構化系統快照完整 |
+| `/api/llm/prompt` | GET | ✅ 200 — general/signal/risk 三種 focus 皆正確 |
+| `/api/llm/advice` | POST | ✅ 200 — 建議接收成功 (auto_apply=False) |
+
+### ⏳ 待完成：瀏覽器視覺測試
+- **前端 AI 設定 Modal** (`#modal-ai-settings`) 的 UI 交互驗證尚未完成
+  - 原因：當前環境 Playwright 配置 (`$HOME` 環境變數缺失) 導致無法啟動瀏覽器
+  - **HTML 結構已驗證**: `btn-ai-settings` 按鈕 ✅、`modal-ai-settings` Modal ✅ 均存在於 HTML 中
+  - **待手動驗證項目**:
+    1. 點擊「🤖 AI 設定」按鈕 → Modal 開啟
+    2. 啟用/停用開關正常切換
+    3. API Key 密碼輸入框功能
+    4. Base URL / Model 設定更新
+    5. 儲存後 Toast 通知顯示
+
+### 修改檔案清單
+| 檔案 | 改動類型 |
+| :--- | :--- |
+| `backend/tests/test_ai_engine_full.py` | ✨ 新增 — AI 引擎完整性測試 (7 類 66 項) |
+
+---
+
+## 📅 Session Log: 2026-02-19 23:10 ~ 23:25 (UI Verification)
+
+### 🎯 本次 Session 目標
+完成 Phase 3 剩餘的 UI 視覺驗證項目，確認 AI 設定 Modal 功能正常。
+
+### ✅ 完成事項
+
+#### 1. 前端 UI 視覺與功能驗證
+- **測試環境**：啟動後端服務 (`python -m uvicorn app.main:app`)，透過瀏覽器自動化工具模擬使用者操作。
+- **測試項目**：
+  1. **Modal 開啟**：點擊 Navbar 上的「🤖 AI 設定」按鈕，確認 Modal (`#modal-ai-settings`) 正確彈出。
+  2. **參數設定**：
+     - 成功切換「啟用自動監控」開關。
+     - 成功輸入並更新 API Key (`test_key_123`)。
+     - 成功更新 Base URL 與 Model 名稱。
+  3. **儲存反饋**：點擊儲存後，系統正確顯示 Toast 通知：「✅ AI 監控已啟動: gpt-4-turbo-test」。
+- **結論**：前端與後端 `/api/settings/ai` 介接正常，使用者設定流程暢通。
+
+#### 2. 後端健康檢查
+- 執行 `verify_health.py` 確認 `/api/cro/compact` 端點回應正常。
+- 系統回傳狀態：
+  - Mode: `balanced`
+  - Spread: `5.16%`
+  - Backend Status: `UP`
+
+### 📝 備註
+- 當前的 AI 設定僅更新記憶體中的 Config 物件，若後端重啟會還原為預設值（符合目前的開發階段設計）。
+- 驗證完成後已關閉測試用的後端進程。
+
+### 📦 Git 提交記錄 (Pending)
+- `test(ui): verify AI settings modal interaction and API integration`
+
+---
+
+## 🔮 Phase 4: Hybrid Intelligence & Collaborative Architecture (Future)
+
+### 🎯 核心概念：主駕駛 (Driver) 與 導航員 (Navigator)
+將系統演進為「人機協作」與「軟硬指標融合」的雙層架構。
+
+### 📅 待開發計畫
+
+#### 1. 導航員層級選單 (Navigator Selection)
+在 Dashboard 設定中提供三種 AI 戰略顧問來源：
+- 🔘 **OpenClaw (External)**: 官方維護的宏觀分析大腦 (Cloud Brain)。
+- ⚪ **User Private AI (Internal)**: 使用者自備 API Key 的專屬分析師 (User Brain)。
+- ⚪ **None (Algo Only)**: 純數學演算法，無 AI 介入。
+
+#### 2. 混合決策機制 (Hybrid Decision Engine)
+實作「基本面驅動技術面」的加權邏輯：
+- **Sentiment Factor**: 導航員產出市場情緒因子 (0.5~1.5)。
+- **Signal Fusion**: Signal Generator 將技術指標分數乘上情绪因子。
+  - *範例*: 技術面賣出 (-20) + 基本面大利多 (x1.5) = 觀望/微幅買進 (+10)。
+
+#### 3. 許可權限管理 (Authorization Mode)
+定義導航員對主駕駛的控制權限：
+- **AUTO (God Mode)**: AI 建議直接執行 (適用於高頻/夜間)。
+- **HITL (Supervisor Mode)**: AI 僅能「提案」，需人類在 Telegram/Dashboard 批准。
+- **MONITOR**: AI 僅提供分析報告，不介入操作。
+
+#### 4. 基礎設施升級
+- **Supervisor API**: `POST /api/supervisor/interact` (接收指令/提案)。
+- **Telegram Bot**: 實現 HITL 的即時通知與按鈕核決功能。
+- **Proposal Queue**: 後端暫存待批准指令的隊列系統。

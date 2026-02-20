@@ -40,6 +40,9 @@ class SignalGenerator:
         self._signal_history: deque = deque(maxlen=200)  # 最近 200 筆信號
         self._trade_results: deque = deque(maxlen=100)   # 最近 100 筆交易結果
 
+        # Phase 5: 情緒因子追蹤
+        self.last_sentiment: Optional[dict] = None
+
     def set_mode(self, mode: str):
         """設定交易模式"""
         if mode in config.TRADING_MODES:
@@ -394,7 +397,220 @@ class SignalGenerator:
         return bias_score, indicator_details
 
     # ═══════════════════════════════════════════════════════════════
-    # 信號生成（Phase 3: 含冷卻期）
+    # Phase 5: 情緒因子計算 (Polymarket 乖離率)
+    # ═══════════════════════════════════════════════════════════════
+
+    def _calculate_market_sentiment(
+        self,
+        mid: float,
+        pm_up_price: Optional[float],
+        pm_down_price: Optional[float],
+        market_title: Optional[str] = None,
+    ) -> dict:
+        """
+        計算 Polymarket 情緒溢價分數
+
+        核心概念：
+            1. 從合約標題解析出目標結算價 (strike_price)
+            2. 根據 BTC 當前價 vs 目標價的距離，用 Sigmoid
+               估算一個「技術面合理的」隱含機率 (fair_prob)
+            3. 將 fair_prob 與 Polymarket 實際定價 (market_prob) 比較
+            4. 兩者的乖離就是情緒分數
+               正值 = 市場比技術面更看漲 (貪婪/FOMO)
+               負值 = 市場比技術面更看跌 (恐懼/Panic)
+
+        Args:
+            mid: Binance BTC 中間價
+            pm_up_price: Polymarket UP 合約價格 (0~1)
+            pm_down_price: Polymarket DOWN 合約價格 (0~1)
+            market_title: 合約標題 (用於解析目標價)
+
+        Returns:
+            {
+                "score": float,        # -100 ~ +100
+                "fair_prob": float,    # 技術面合理機率 (0~1)
+                "market_prob": float,  # Polymarket 實際定價 (0~1)
+                "premium_pct": float,  # 溢價百分比
+                "label": str,          # 情緒標籤
+            }
+        """
+        result = {
+            "score": 0.0,
+            "fair_prob": 0.5,
+            "market_prob": 0.5,
+            "premium_pct": 0.0,
+            "label": "NEUTRAL",
+        }
+
+        if not mid or mid <= 0 or not pm_up_price:
+            return result
+
+        # ── Step 1: 解析目標結算價 ────────────────────────────
+        strike_price = self._parse_strike_price(market_title, mid)
+
+        # ── Step 2: 計算技術面合理機率 ────────────────────────
+        # 使用 Sigmoid 函數：距離越近 → 機率越高
+        # distance_pct = (mid - strike) / strike * 100
+        # 正值 = 已經超過目標（應該看漲）
+        # 負值 = 還沒到目標（需要上漲才贏）
+        distance_pct = (mid - strike_price) / strike_price * 100
+        steepness = config.SENTIMENT_CONFIG["fair_prob_steepness"]
+
+        # Sigmoid: 1 / (1 + e^(-k * x))
+        # distance_pct = +0.5% → fair_prob ≈ 0.98 (已突破目標)
+        # distance_pct = 0%    → fair_prob = 0.50 (剛好在目標上)
+        # distance_pct = -0.5% → fair_prob ≈ 0.02 (遠低於目標)
+        exp_val = min(max(-steepness * distance_pct, -500), 500)
+        fair_prob = 1.0 / (1.0 + math.exp(exp_val))
+
+        # ── Step 3: 取得市場實際定價 ──────────────────────────
+        market_prob = pm_up_price  # UP 合約價格 = 市場認為上漲的機率
+
+        # ── Step 4: 計算情緒乖離 ──────────────────────────────
+        # premium = 市場定價 - 合理機率
+        # 正值 = 市場比技術面更樂觀（貪婪）
+        # 負值 = 市場比技術面更悲觀（恐懼）
+        premium = market_prob - fair_prob
+        premium_pct = premium * 100
+
+        # 將溢價映射到 -100 ~ +100 的情緒分數
+        # 用 tanh 壓縮，±30% 溢價對應飽和
+        sentiment_score = math.tanh(premium_pct / 30.0) * 100
+
+        # ── Step 5: 分類標籤 ──────────────────────────────────
+        if sentiment_score > 60:
+            label = "EXTREME_GREED"
+        elif sentiment_score > 30:
+            label = "GREED"
+        elif sentiment_score > -30:
+            label = "NEUTRAL"
+        elif sentiment_score > -60:
+            label = "FEAR"
+        else:
+            label = "EXTREME_FEAR"
+
+        result = {
+            "score": round(sentiment_score, 2),
+            "fair_prob": round(fair_prob, 4),
+            "market_prob": round(market_prob, 4),
+            "premium_pct": round(premium_pct, 2),
+            "label": label,
+            "strike_price": round(strike_price, 2),
+            "distance_pct": round(distance_pct, 4),
+        }
+
+        self.last_sentiment = result
+        return result
+
+    @staticmethod
+    def _parse_strike_price(
+        market_title: Optional[str], fallback_mid: float
+    ) -> float:
+        """
+        從 Polymarket 合約標題解析目標結算價
+
+        合約標題格式範例:
+            "Will Bitcoin be above $67,500 at 2026-02-20 15:00 UTC?"
+            "btc-updown-15m-1771563600"
+
+        若解析失敗，使用 BTC 中間價四捨五入到最近的 $100 作為估算。
+        """
+        import re
+        if market_title:
+            # 嘗試匹配 $XX,XXX 或 $XXXXX 格式
+            match = re.search(r'\$([\d,]+)', market_title)
+            if match:
+                try:
+                    return float(match.group(1).replace(',', ''))
+                except ValueError:
+                    pass
+
+        # Fallback: 四捨五入到最近的 $100
+        return round(fallback_mid / 100) * 100
+
+    def _apply_sentiment_adjustment(
+        self,
+        base_score: float,
+        sentiment: dict,
+        mode_config: dict,
+    ) -> tuple:
+        """
+        根據情緒分數與交易模式的敏感度，調整技術指標分數
+
+        核心邏輯:
+            - 若「看多信號 + 市場貪婪」→ 衰減（避免追高）
+            - 若「看多信號 + 市場恐懼」→ 放大（逢低布局）
+            - 若「看空信號 + 市場恐懼」→ 衰減（避免追低）
+            - 若「看空信號 + 市場貪婪」→ 放大（高位放空）
+            - 簡化公式: 「信號方向與情緒同向 → 衰減，逆向 → 放大」
+
+        Args:
+            base_score: 技術指標算出的原始分數 (-100~+100)
+            sentiment: _calculate_market_sentiment 的輸出
+            mode_config: 當前交易模式配置
+
+        Returns:
+            (adjusted_score, adjustment_details)
+        """
+        sensitivity = mode_config.get("sentiment_sensitivity", 0.0)
+        sentiment_score = sentiment.get("score", 0.0)
+        sent_cfg = config.SENTIMENT_CONFIG
+        threshold = sent_cfg["extreme_threshold"]
+
+        # 如果敏感度為 0 或情緒不極端，不調整
+        if sensitivity <= 0 or abs(sentiment_score) < threshold:
+            return base_score, {
+                "applied": False,
+                "reason": "sensitivity=0" if sensitivity <= 0
+                          else f"|sentiment|={abs(sentiment_score):.0f} < threshold={threshold}",
+                "multiplier": 1.0,
+            }
+
+        # ── 判斷「同向」或「逆向」─────────────────────────────
+        # 信號正 + 情緒正 = 同向（追高風險）→ 衰減
+        # 信號正 + 情緒負 = 逆向（恐慌中做多）→ 放大
+        same_direction = (base_score > 0 and sentiment_score > 0) or \
+                         (base_score < 0 and sentiment_score < 0)
+
+        # ── 計算情緒強度 (0~1，超過 threshold 的部分) ──────────
+        intensity = (abs(sentiment_score) - threshold) / (100 - threshold)
+        intensity = max(0.0, min(1.0, intensity))
+
+        if same_direction:
+            # 同向 → 衰減：越貪婪/恐慌、敏感度越高 → 扣越多
+            max_decay = sent_cfg["max_decay_pct"]
+            # multiplier 從 1.0 → max_decay（例如 0.1）
+            multiplier = 1.0 - (1.0 - max_decay) * intensity * sensitivity
+            reason = "同向衰減（避免追高/追低）"
+        else:
+            # 逆向 → 放大：恐慌中做多 / FOMO 中做空
+            max_boost = sent_cfg["max_boost_multiplier"]
+            multiplier = 1.0 + (max_boost - 1.0) * intensity * sensitivity
+            reason = "逆向放大（逢低布局/高位放空）"
+
+        adjusted_score = base_score * multiplier
+        # 夾緊在 ±100
+        adjusted_score = max(-100.0, min(100.0, adjusted_score))
+
+        logger.info(
+            f"🎭 情緒調整 | sentiment={sentiment_score:+.0f} ({sentiment.get('label')}) | "
+            f"sensitivity={sensitivity} | {'同向衰減' if same_direction else '逆向放大'} | "
+            f"multiplier={multiplier:.3f} | "
+            f"score {base_score:+.1f} → {adjusted_score:+.1f}"
+        )
+
+        return adjusted_score, {
+            "applied": True,
+            "reason": reason,
+            "multiplier": round(multiplier, 4),
+            "same_direction": same_direction,
+            "intensity": round(intensity, 4),
+            "sensitivity": sensitivity,
+            "original_score": round(base_score, 2),
+        }
+
+    # ═══════════════════════════════════════════════════════════════
+    # 信號生成（Phase 5: 含情緒調整 + 冷卻期）
     # ═══════════════════════════════════════════════════════════════
 
     def generate_signal(
@@ -404,27 +620,34 @@ class SignalGenerator:
         mid: float,
         trades: list,
         klines: list,
+        pm_state=None,
     ) -> dict:
         """
-        生成交易信號（Phase 3 Enhanced）
+        生成交易信號（Phase 5: Hybrid Decision Engine）
 
-        Phase 3 新增：
-        - B5: 冷卻期檢查（同方向信號 N 秒內不重複觸發）
-        - CRO: 信號歷史紀錄
+        Phase 5 新增：
+        - 情緒因子計算（Polymarket 乖離率）
+        - 根據交易模式的 sentiment_sensitivity 調整分數
+
+        Args:
+            pm_state: Polymarket 狀態物件（含 up_price, down_price, market_title）
 
         Returns:
             {
                 "direction": "BUY_UP" | "SELL_DOWN" | "NEUTRAL",
                 "score": float,
+                "raw_score": float,       # Phase 5: 調整前的原始分數
                 "confidence": float,
                 "mode": str,
                 "threshold": float,
                 "indicators": dict,
+                "sentiment": dict,         # Phase 5: 情緒因子
+                "sentiment_adjustment": dict,  # Phase 5: 調整詳情
                 "timestamp": float,
-                "cooldown_blocked": bool,  # Phase 3: 是否被冷卻期擋住
+                "cooldown_blocked": bool,
             }
         """
-        score, indicators = self.calculate_bias_score(
+        raw_score, indicators = self.calculate_bias_score(
             bids, asks, mid, trades, klines
         )
 
@@ -432,7 +655,24 @@ class SignalGenerator:
         threshold = mode_config["signal_threshold"]
         now = time.time()
 
-        # 決定方向（原始）
+        # ── Phase 5: 計算情緒因子 ─────────────────────────────
+        sentiment = {"score": 0.0, "label": "N/A"}
+        sentiment_adj = {"applied": False, "multiplier": 1.0}
+        score = raw_score
+
+        if pm_state is not None:
+            pm_up = getattr(pm_state, 'up_price', None)
+            pm_down = getattr(pm_state, 'down_price', None)
+            pm_title = getattr(pm_state, 'market_title', None)
+
+            sentiment = self._calculate_market_sentiment(
+                mid, pm_up, pm_down, pm_title
+            )
+            score, sentiment_adj = self._apply_sentiment_adjustment(
+                raw_score, sentiment, mode_config
+            )
+
+        # 決定方向（使用調整後的分數）
         if score >= threshold:
             raw_direction = "BUY_UP"
         elif score <= -threshold:
@@ -477,11 +717,14 @@ class SignalGenerator:
         signal = {
             "direction": raw_direction,
             "score": round(score, 2),
+            "raw_score": round(raw_score, 2),
             "confidence": round(confidence, 2),
             "mode": self.current_mode,
             "mode_name": mode_config["name"],
             "threshold": threshold,
             "indicators": indicators,
+            "sentiment": sentiment,
+            "sentiment_adjustment": sentiment_adj,
             "timestamp": now,
             "cooldown_blocked": cooldown_blocked,
         }

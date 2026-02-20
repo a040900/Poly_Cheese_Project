@@ -148,6 +148,7 @@
         renderConnections(data.connections);
         renderMarket(data.market);
         renderSignal(data.signal);
+        renderSentiment(data.sentiment, data.sentiment_adjustment, data.trading);
         renderIndicators(data.indicators);
         renderTrading(data.trading);
         renderLatestAdvice(data.latest_advice);
@@ -234,14 +235,69 @@
             el.classList.add('signal-neutral');
         }
 
-        // 信號分數
+        // 信號分數（含情緒調整前後比較）
         const score = signal.score || 0;
+        const rawScore = signal.raw_score || 0;
         const confidence = signal.confidence || 0;
-        setTextContent('val-signal-score',
-            `分數: ${score > 0 ? '+' : ''}${score.toFixed(1)} | 信心度: ${confidence.toFixed(0)}%`);
+        let scoreText = `分數: ${score > 0 ? '+' : ''}${score.toFixed(1)}`;
+        if (rawScore !== 0 && Math.abs(rawScore - score) > 0.1) {
+            scoreText += ` (原 ${rawScore > 0 ? '+' : ''}${rawScore.toFixed(1)})`;
+        }
+        scoreText += ` | 信心度: ${confidence.toFixed(0)}%`;
+        setTextContent('val-signal-score', scoreText);
 
         // 更新儀表盤
         updateGauge(score);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // Phase 5: 情緒因子渲染
+    // ═══════════════════════════════════════════════════════════
+    function renderSentiment(sentiment, adjustment, trading) {
+        const labelEl = document.getElementById('val-sentiment-label');
+        const markerEl = document.getElementById('sentiment-bar-marker');
+        const detailEl = document.getElementById('val-sentiment-detail');
+        const cardEl = document.getElementById('card-sentiment');
+        if (!labelEl) return;
+
+        if (!sentiment || sentiment.score === undefined || sentiment.label === 'N/A') {
+            labelEl.textContent = '等待數據';
+            labelEl.className = 'metric-value sentiment-neutral';
+            if (detailEl) detailEl.textContent = '需要 Polymarket 連線';
+            return;
+        }
+
+        const score = sentiment.score || 0;
+        const label = sentiment.label || 'NEUTRAL';
+        const premium = sentiment.premium_pct || 0;
+        const sensitivity = trading ? (trading.sentiment_sensitivity || 0) : 0;
+
+        // 標籤映射
+        const labelMap = {
+            'EXTREME_GREED': { text: '🔥 極度貪婪', cls: 'sentiment-extreme-greed' },
+            'GREED': { text: '😤 貪婪', cls: 'sentiment-greed' },
+            'NEUTRAL': { text: '😐 中性', cls: 'sentiment-neutral' },
+            'FEAR': { text: '😰 恐懼', cls: 'sentiment-fear' },
+            'EXTREME_FEAR': { text: '❄️ 極度恐懼', cls: 'sentiment-extreme-fear' },
+        };
+        const mapped = labelMap[label] || labelMap['NEUTRAL'];
+
+        labelEl.textContent = mapped.text;
+        labelEl.className = 'metric-value ' + mapped.cls;
+
+        // 漸變色條標記位置：score -100 → left:0%, 0 → 50%, +100 → 100%
+        if (markerEl) {
+            const pct = Math.max(0, Math.min(100, (score + 100) / 2));
+            markerEl.style.left = pct + '%';
+        }
+
+        // 底部詳情
+        if (detailEl) {
+            const adj = adjustment && adjustment.applied
+                ? ` | 🎭 ${adjustment.multiplier.toFixed(2)}x`
+                : '';
+            detailEl.textContent = `溢價: ${premium > 0 ? '+' : ''}${premium.toFixed(1)}% | 敏感度: ${(sensitivity * 100).toFixed(0)}%${adj}`;
+        }
     }
 
     function renderIndicators(indicators) {
@@ -1217,6 +1273,123 @@
     }
 
     // ═══════════════════════════════════════════════════════════
+    // Phase 4: Supervisor 監控台
+    // ═══════════════════════════════════════════════════════════
+    async function fetchSupervisorStatus() {
+        try {
+            const [svResp, tgResp] = await Promise.all([
+                fetch(`${API_BASE}/supervisor/status`),
+                fetch(`${API_BASE}/telegram/status`),
+            ]);
+            const svData = await svResp.json();
+            const tgData = await tgResp.json();
+
+            renderSupervisorStatus(svData, tgData);
+        } catch (e) {
+            console.error('Supervisor 狀態載入失敗:', e);
+        }
+    }
+
+    function renderSupervisorStatus(sv, tg) {
+        // Navigator 卡片
+        const navEl = document.getElementById('sv-navigator');
+        if (navEl) {
+            const navLabels = { internal: '🧠 Internal', openclaw: '☁️ OpenClaw', none: '⛔ None' };
+            const nav = sv.navigator || 'internal';
+            navEl.textContent = navLabels[nav] || nav;
+            navEl.className = `sv-card-value sv-nav-${nav}`;
+        }
+
+        // AuthMode 卡片
+        const authEl = document.getElementById('sv-auth-mode');
+        if (authEl) {
+            const authLabels = { auto: '⚡ God Mode', hitl: '🛡️ Supervisor', monitor: '👁️ Monitor' };
+            const auth = sv.auth_mode || 'hitl';
+            authEl.textContent = authLabels[auth] || auth;
+            authEl.className = `sv-card-value sv-auth-${auth}`;
+        }
+
+        // Telegram 卡片
+        const tgStatusEl = document.getElementById('sv-tg-status');
+        const tgIconEl = document.getElementById('sv-tg-icon');
+        if (tgStatusEl) {
+            if (tg.running) {
+                tgStatusEl.textContent = '🟢 運行中';
+                tgStatusEl.className = 'sv-card-value sv-tg-running';
+            } else if (tg.enabled) {
+                tgStatusEl.textContent = '🟡 已啟用';
+                tgStatusEl.className = 'sv-card-value';
+            } else if (!tg.available) {
+                tgStatusEl.textContent = '⚪ 未安裝';
+                tgStatusEl.className = 'sv-card-value sv-tg-offline';
+            } else {
+                tgStatusEl.textContent = '🔴 未啟用';
+                tgStatusEl.className = 'sv-card-value sv-tg-offline';
+            }
+        }
+
+        // Pending 卡片
+        const pq = sv.proposal_queue || {};
+        setTextContent('sv-pending', pq.pending_count || 0);
+
+        // 統計看板
+        const authStats = sv.stats || {};
+        setTextContent('sv-total-created', pq.total_created || 0);
+        setTextContent('sv-total-approved', pq.total_approved || 0);
+        setTextContent('sv-total-rejected', pq.total_rejected || 0);
+        setTextContent('sv-total-expired', pq.total_expired || 0);
+        setTextContent('sv-total-auto', pq.total_auto_approved || 0);
+        setTextContent('sv-total-blocked', authStats.total_blocked || 0);
+    }
+
+    async function fetchSupervisorHistory() {
+        try {
+            const resp = await fetch(`${API_BASE}/supervisor/history?limit=20`);
+            const data = await resp.json();
+            renderSupervisorHistory(data.history || []);
+        } catch (e) {
+            console.error('提案歷史載入失敗:', e);
+        }
+    }
+
+    function renderSupervisorHistory(history) {
+        const body = document.getElementById('sv-history-body');
+        if (!body) return;
+
+        if (!history || history.length === 0) {
+            body.innerHTML = '<div class="sv-history-empty">尚無提案記錄</div>';
+            return;
+        }
+
+        body.innerHTML = history.map(p => {
+            const createdTime = new Date(p.created_at * 1000).toLocaleString('zh-TW', {
+                month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit', second: '2-digit',
+                hour12: false,
+            });
+            const statusBadge = `<span class="sv-badge sv-badge-${p.status}">${p.status}</span>`;
+            const priorityCls = `sv-priority sv-priority-${p.priority || 'normal'}`;
+
+            return `<div class="sv-history-row">
+                <span>${(p.id || '').slice(0, 8)}</span>
+                <span>${p.action || '--'}</span>
+                <span>${p.confidence || 0}%</span>
+                <span class="${priorityCls}">${p.priority || '--'}</span>
+                <span>${statusBadge}</span>
+                <span>${p.source || '--'}</span>
+                <span>${createdTime}</span>
+            </div>`;
+        }).join('');
+    }
+
+    async function fetchSupervisorAll() {
+        await Promise.all([
+            fetchSupervisorStatus(),
+            fetchSupervisorHistory(),
+        ]);
+    }
+
+    // ═══════════════════════════════════════════════════════════
     // Phase 2: 初始化和事件綁定
     // ═══════════════════════════════════════════════════════════
     function initPhase2() {
@@ -1241,13 +1414,33 @@
             }
         });
 
+        // AI Settings (New Phase 3)
+        document.getElementById('btn-ai-settings')?.addEventListener('click', () => {
+            const modal = document.getElementById('modal-ai-settings');
+            if (modal) {
+                modal.style.display = 'flex';
+                loadAISettings();
+            }
+        });
+        document.getElementById('modal-ai-close')?.addEventListener('click', () => {
+            document.getElementById('modal-ai-settings').style.display = 'none';
+        });
+        document.getElementById('btn-save-ai')?.addEventListener('click', saveAISettings);
+
         // 健康
         document.getElementById('btn-refresh-health')?.addEventListener('click', fetchHealth);
+
+        // Phase 4: Supervisor 監控台
+        document.getElementById('btn-refresh-supervisor')?.addEventListener('click', fetchSupervisorAll);
 
         // 首次載入
         fetchPerformance();
         fetchAIHistory();
         fetchHealth();
+        fetchSupervisorAll();
+
+        // Supervisor 定期刷新（每 30 秒）
+        setInterval(fetchSupervisorStatus, 30000);
     }
 
     // 加入到 DOMContentLoaded（靠前面的已有，這裡補入 Phase 2）
@@ -1255,7 +1448,94 @@
 
     // resize 時重繪權益曲線
     window.addEventListener('resize', () => {
-        fetchPerformance();
+        if (typeof fetchPerformance === 'function') fetchPerformance();
+        drawPnlChart();
     });
+
+    // ═══════════════════════════════════════════════════════════
+    // AI 設定管理 (Phase 3 P1)
+    // ═══════════════════════════════════════════════════════════
+    async function loadAISettings() {
+        try {
+            const resp = await fetch(`${API_BASE}/settings/ai`);
+            const data = await resp.json();
+
+            const checkbox = document.getElementById('ai-enabled');
+            if (checkbox) checkbox.checked = data.enabled;
+
+            const keyInput = document.getElementById('ai-api-key');
+            if (keyInput) {
+                keyInput.placeholder = data.api_key || 'sk-...';
+                keyInput.value = '';
+            }
+
+            const urlInput = document.getElementById('ai-base-url');
+            if (urlInput) urlInput.value = data.base_url || 'https://api.openai.com/v1';
+
+            const modelInput = document.getElementById('ai-model');
+            if (modelInput) modelInput.value = data.model || 'gpt-4-turbo';
+
+            const intervalInput = document.getElementById('ai-interval');
+            if (intervalInput) intervalInput.value = data.interval || 900;
+
+            const msg = document.getElementById('ai-status-msg');
+            if (msg) {
+                msg.textContent = `當前狀態: ${data.status}`;
+                msg.style.color = (data.status === 'running' || data.status === 'active') ? '#4ade80' : '#fbbf24';
+            }
+
+        } catch (e) {
+            console.error('載入 AI 設定失敗:', e);
+            showToast('❌ 載入設定失敗');
+        }
+    }
+
+    async function saveAISettings() {
+        const btn = document.getElementById('btn-save-ai');
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = '儲存中...';
+        }
+
+        const enabled = document.getElementById('ai-enabled')?.checked || false;
+        const apiKey = document.getElementById('ai-api-key')?.value || '';
+        const baseUrl = document.getElementById('ai-base-url')?.value || '';
+        const model = document.getElementById('ai-model')?.value || '';
+        const interval = parseInt(document.getElementById('ai-interval')?.value || '900');
+
+        const payload = {
+            enabled,
+            api_key: apiKey,
+            base_url: baseUrl,
+            model,
+            interval
+        };
+
+        try {
+            const resp = await fetch(`${API_BASE}/settings/ai`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const res = await resp.json();
+
+            if (res.monitor_enabled) {
+                showToast('✅ AI 監控已啟動: ' + model);
+            } else {
+                showToast('⚪ AI 監控已停用');
+            }
+
+            document.getElementById('modal-ai-settings').style.display = 'none';
+
+        } catch (e) {
+            console.error('儲存 AI 設定失敗:', e);
+            showToast('❌ 儲存失敗');
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = '儲存並重啟 AI';
+            }
+        }
+    }
 
 })();

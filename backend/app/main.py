@@ -15,7 +15,8 @@ import logging
 import sys
 from pathlib import Path
 from contextlib import asynccontextmanager
-from typing import Dict, List, Set
+from typing import Dict, List, Set, Optional
+from pydantic import BaseModel
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
@@ -37,8 +38,15 @@ from app.performance.tracker import PerformanceTracker
 from app.performance.backtester import run_backtest, run_mode_comparison
 from app.llm.prompt_builder import prompt_builder
 from app.llm.advisor import llm_advisor
+from app.llm.engine import ai_engine
 from app.trading.risk_manager import risk_manager
+from app.supervisor.authorization import auth_manager
+from app.supervisor.proposal_queue import proposal_queue
+from app.notifications.telegram_bot import telegram_bot
 
+
+# ═══════════════════════════════════════════════════════════════
+# 日誌設定
 # ═══════════════════════════════════════════════════════════════
 # 日誌設定
 # ═══════════════════════════════════════════════════════════════
@@ -136,7 +144,8 @@ async def on_market_data_event(event: Event):
             all_klines.append(bs.cur_kline)
 
         signal = signal_generator.generate_signal(
-            bs.bids, bs.asks, bs.mid, bs.trades, all_klines
+            bs.bids, bs.asks, bs.mid, bs.trades, all_klines,
+            pm_state=polymarket_feed.state,
         )
 
         # 儲存信號到資料庫
@@ -284,16 +293,22 @@ def build_dashboard_data() -> dict:
         "signal": {
             "direction": signal.get("direction", "NEUTRAL"),
             "score": signal.get("score", 0),
+            "raw_score": signal.get("raw_score", 0),
             "confidence": signal.get("confidence", 0),
             "threshold": signal.get("threshold", 40),
             "timestamp": signal.get("timestamp", 0),
         },
+        "sentiment": signal.get("sentiment", {}),
+        "sentiment_adjustment": signal.get("sentiment_adjustment", {}),
         "indicators": indicators,
         "trading": {
             "mode": signal_generator.current_mode,
             "mode_name": config.TRADING_MODES.get(
                 signal_generator.current_mode, {}
             ).get("name", ""),
+            "sentiment_sensitivity": config.TRADING_MODES.get(
+                signal_generator.current_mode, {}
+            ).get("sentiment_sensitivity", 0),
             "simulation": sim_engine.get_stats(),
             "recent_trades": sim_engine.get_recent_trades(),
             "pnl_curve": sim_engine.get_pnl_curve(),
@@ -333,6 +348,16 @@ async def lifespan(app: FastAPI):
     # 啟動模擬交易
     sim_engine.start()
 
+    # Phase 4: 注入 SignalGenerator 到 AuthorizationManager
+    auth_manager.inject_signal_generator(signal_generator)
+    logger.info("🛡️ Phase 4 Supervisor 模組已就緒")
+
+    # 啟動內建 AI 引擎 (Phase 3 P1)
+    await ai_engine.start()
+
+    # Phase 4: 啟動 Telegram Bot
+    await telegram_bot.start()
+
     # 啟動背景任務（推播 + 結算，信號已改為事件驅動）
     broadcast_task = asyncio.create_task(broadcast_loop())
     settle_task = asyncio.create_task(settle_loop())
@@ -350,6 +375,8 @@ async def lifespan(app: FastAPI):
     broadcast_task.cancel()
     settle_task.cancel()
     sim_engine.stop()
+    await ai_engine.stop()
+    await telegram_bot.stop()
     await binance_feed.stop()
     await polymarket_feed.stop()
     await chainlink_feed.stop()
@@ -385,6 +412,61 @@ if frontend_dir.exists():
 # ── 前端頁面 ─────────────────────────────────────────────────
 
 from fastapi.responses import HTMLResponse
+
+
+# ── AI 設定與狀態 API ──────────────────────────────────────────
+
+class AISettingsModel(BaseModel):
+    enabled: bool
+    api_key: Optional[str] = None
+    base_url: Optional[str] = None
+    model: Optional[str] = None
+    interval: Optional[int] = None
+
+@app.get("/api/settings/ai")
+async def get_ai_settings():
+    """取得目前 AI 監控設定"""
+    masked_key = ""
+    if config.OPENAI_API_KEY and len(config.OPENAI_API_KEY) > 4:
+        masked_key = "***" + config.OPENAI_API_KEY[-4:]
+    
+    return {
+        "enabled": config.AI_MONITOR_ENABLED,
+        "api_key": masked_key,
+        "base_url": config.OPENAI_BASE_URL,
+        "model": config.OPENAI_MODEL,
+        "interval": config.AI_MONITOR_INTERVAL,
+        "status": ai_engine.state.value if hasattr(ai_engine, "state") else "unknown"
+    }
+
+@app.post("/api/settings/ai")
+async def update_ai_settings(settings: AISettingsModel):
+    """更新 AI 監控設定並重啟引擎"""
+    config.AI_MONITOR_ENABLED = settings.enabled
+    
+    # Only update if provided (allow partial updates for key security)
+    if settings.api_key and settings.api_key.strip():
+        if "***" not in settings.api_key:
+             config.OPENAI_API_KEY = settings.api_key
+
+    if settings.base_url:
+        config.OPENAI_BASE_URL = settings.base_url
+    if settings.model:
+        config.OPENAI_MODEL = settings.model
+    if settings.interval:
+        config.AI_MONITOR_INTERVAL = settings.interval
+        
+    logger.info(f"🔧 AI 設定已更新: Enabled={settings.enabled}, Model={config.OPENAI_MODEL}")
+    
+    # Restart Engine to apply changes
+    await ai_engine.stop()
+    # Give a small pause? No need.
+    
+    if config.AI_MONITOR_ENABLED:
+        await ai_engine.start()
+        
+    return {"status": "updated", "monitor_enabled": config.AI_MONITOR_ENABLED}
+
 
 @app.get("/")
 async def serve_frontend():
@@ -711,7 +793,7 @@ async def get_llm_prompt(focus: str = "general"):
 @app.post("/api/llm/advice")
 async def receive_llm_advice(data: dict):
     """
-    接收 AI 代理的分析建議
+    接收 AI 代理的分析建議 (Phase 4: 經過 AuthorizationManager 路由)
 
     Body:
         {
@@ -722,14 +804,18 @@ async def receive_llm_advice(data: dict):
             "action": "SWITCH_MODE",
             "param_adjustments": { ... },
             "reasoning": "理由",
-            "auto_apply": false
+            "source": "api"  (可選: "api" | "internal" | "openclaw")
         }
+
+    回傳結果會根據 AUTHORIZATION_MODE 不同而不同:
+        - auto:    {"status": "auto_executed", ...}
+        - hitl:    {"status": "queued", "proposal_id": "xxx", ...}
+        - monitor: {"status": "monitored", ...}
     """
-    auto_apply = data.pop("auto_apply", False)
-    result = llm_advisor.process_advice(
+    source = data.pop("source", "api")
+    result = auth_manager.process_advice(
         advice_data=data,
-        signal_generator=signal_generator,
-        auto_apply=auto_apply,
+        source=source,
     )
     return result
 
@@ -804,6 +890,159 @@ async def get_bus_stats():
 async def get_risk_status():
     """取得風險管理狀態（Kelly Criterion + Circuit Breakers）"""
     return risk_manager.get_status()
+
+
+# ═══════════════════════════════════════════════════════════════
+# Phase 4: Supervisor API（提案佇列 + 授權管理）
+# ═══════════════════════════════════════════════════════════════
+
+@app.get("/api/supervisor/status")
+async def get_supervisor_status():
+    """取得 Supervisor 模組完整狀態（Navigator + AuthMode + 佇列統計）"""
+    return auth_manager.get_status()
+
+
+@app.get("/api/supervisor/proposals")
+async def get_pending_proposals():
+    """
+    取得待審核的提案列表
+
+    回傳按優先級排序的待審核提案（CRITICAL > HIGH > NORMAL > LOW）。
+    過期的提案會在此呼叫時自動清理。
+    """
+    return {
+        "proposals": proposal_queue.get_pending(),
+        "total_pending": len(proposal_queue.get_pending()),
+    }
+
+
+@app.get("/api/supervisor/proposals/{proposal_id}")
+async def get_proposal_detail(proposal_id: str):
+    """取得單一提案的詳細資訊"""
+    proposal = proposal_queue.get_proposal(proposal_id)
+    if not proposal:
+        return JSONResponse(
+            status_code=404,
+            content={"error": f"提案 {proposal_id} 不存在"}
+        )
+    return proposal
+
+
+@app.post("/api/supervisor/proposals/{proposal_id}/approve")
+async def approve_proposal(proposal_id: str, data: dict = None):
+    """
+    核准提案
+
+    Body (可選):
+        {"note": "核准備註"}
+    """
+    data = data or {}
+    result = proposal_queue.approve(
+        proposal_id=proposal_id,
+        note=data.get("note", ""),
+    )
+    if not result["success"]:
+        return JSONResponse(status_code=400, content=result)
+    return result
+
+
+@app.post("/api/supervisor/proposals/{proposal_id}/reject")
+async def reject_proposal(proposal_id: str, data: dict = None):
+    """
+    拒絕提案
+
+    Body (可選):
+        {"note": "拒絕原因"}
+    """
+    data = data or {}
+    result = proposal_queue.reject(
+        proposal_id=proposal_id,
+        note=data.get("note", ""),
+    )
+    if not result["success"]:
+        return JSONResponse(status_code=400, content=result)
+    return result
+
+
+@app.get("/api/supervisor/history")
+async def get_proposal_history(limit: int = 50):
+    """取得已處理的提案歷史"""
+    return {
+        "history": proposal_queue.get_history(limit),
+        "stats": proposal_queue.get_stats(),
+    }
+
+
+class SupervisorSettingsModel(BaseModel):
+    navigator: Optional[str] = None   # "openclaw" | "internal" | "none"
+    auth_mode: Optional[str] = None   # "auto" | "hitl" | "monitor"
+
+
+@app.post("/api/supervisor/settings")
+async def update_supervisor_settings(settings: SupervisorSettingsModel):
+    """
+    更新 Supervisor 設定（Navigator + Authorization Mode）
+
+    Body:
+        {
+            "navigator": "internal",  // 可選
+            "auth_mode": "hitl"       // 可選
+        }
+    """
+    result = auth_manager.update_settings(
+        navigator=settings.navigator,
+        auth_mode=settings.auth_mode,
+    )
+    if not result["success"]:
+        return JSONResponse(status_code=400, content=result)
+    return result
+
+
+# ── Telegram Bot API ─────────────────────────────────────────
+
+@app.get("/api/telegram/status")
+async def get_telegram_status():
+    """取得 Telegram Bot 狀態"""
+    return telegram_bot.get_status()
+
+
+class TelegramConfigModel(BaseModel):
+    bot_token: Optional[str] = None
+    chat_id: Optional[str] = None
+    enabled: Optional[bool] = None
+
+
+@app.post("/api/telegram/configure")
+async def configure_telegram(settings: TelegramConfigModel):
+    """
+    動態配置 Telegram Bot（供 AI Agent 使用）
+
+    Body:
+        {
+            "bot_token": "123456:ABCdefGHI...",  // 可選
+            "chat_id": "987654321",               // 可選
+            "enabled": true                        // 可選
+        }
+
+    設定完成且 enabled=true 後，Bot 會自動啟動。
+    """
+    result = await telegram_bot.configure(
+        bot_token=settings.bot_token,
+        chat_id=settings.chat_id,
+        enabled=settings.enabled,
+    )
+    return result
+
+
+@app.post("/api/telegram/test")
+async def test_telegram():
+    """發送測試訊息到 Telegram"""
+    success = await telegram_bot.send_message(
+        "🧪 *測試訊息*\n\n"
+        "如果你看到這則訊息，代表 Telegram Bot 配置正確！\n"
+        f"⏰ {time.strftime('%Y-%m-%d %H:%M:%S')}"
+    )
+    return {"success": success}
 
 
 # ═══════════════════════════════════════════════════════════════
