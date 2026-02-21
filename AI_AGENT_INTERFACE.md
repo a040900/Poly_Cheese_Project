@@ -165,3 +165,7 @@ Access Information:
 **路線 B：動態指標引擎 (Dynamic Rule Engine)**
 - 目標：把現在寫死在程式碼裡的信號與權重邏輯配置化，讓 AI (也就是你) 未來可以自行修正規則。
 - 需要修改：建立動態運算式解析器 (Expression Parser) 或設計 JSON 規則檔，然後新增一組 API 提供你更新各個技術指標的權重和觸發條件。
+
+**路線 C：高階技術指標擴充 (Indicator Arsenal)**
+- 目標：引入 ADX (趨勢強度)、ATR (動態波動) 與 EMA Slope (動能斜率)，並將它們整合進 `BIAS_WEIGHTS` 動態權重分配系統中。
+- 需要修改：優先在 `technical.py` 實作 ADX 的 `+DI/-DI` 計算邏輯，並修改 `signal_generator.py` 讓它能在盤整區 (ADX < 20) 大幅調降遲鈍指標 (如 MACD) 的影響力。
