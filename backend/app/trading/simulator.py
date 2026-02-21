@@ -32,6 +32,7 @@ class SimulationTrade:
         trading_mode: str,
         market_title: Optional[str] = None,
         contract_price: float = 0.5,
+        btc_price_start: Optional[float] = None,  # BUG FIX: 15分鐘週期開始時的 BTC 價格
     ):
         self.trade_id = trade_id
         self.direction = direction       # "BUY_UP" 或 "SELL_DOWN"
@@ -41,6 +42,7 @@ class SimulationTrade:
         self.trading_mode = trading_mode
         self.market_title = market_title  # Polymarket 市場標題
         self.contract_price = contract_price  # 開倉時合約價格（用於結算回報率計算）
+        self.btc_price_start = btc_price_start  # BUG FIX: 記錄開倉時的 BTC 價格
         self.entry_time = time.time()
         self.exit_price: Optional[float] = None
         self.exit_time: Optional[float] = None
@@ -208,6 +210,7 @@ class SimulationEngine(TradingEngine):
                 trading_mode=signal.get("mode", "balanced"),
                 volatility_pct=0.5, # Default since we don't have it directly here
                 contract_price=contract_price,
+            btc_price_start=signal.get("btc_price"),  # BUG FIX: 傳入開倉時的 BTC 價格
                 unrealized_pnl=total_unrealized_pnl,
                 open_exposure=total_open_exposure,
             )
@@ -330,6 +333,7 @@ class SimulationEngine(TradingEngine):
             trading_mode=signal.get("mode", "balanced"),
             market_title=market_title,
             contract_price=contract_price,
+            btc_price_start=signal.get("btc_price"),  # BUG FIX: 傳入開倉時的 BTC 價格
         )
 
         # 扣除資金和手續費
@@ -448,23 +452,31 @@ class SimulationEngine(TradingEngine):
 
         return trade.pnl
 
-    def auto_settle_expired(self, btc_price_start: float, btc_price_end: float):
+    def auto_settle_expired(self, btc_price_current: float):
         """
         自動結算 15 分鐘到期的交易
 
+        BUG FIX (2026-02-21): 
+        Polymarket 15 分鐘市場結算規則：
+        - 結束價格 >= 開始價格 → UP
+        - 結束價格 < 開始價格 → DOWN
+        
+        每筆交易在開倉時已記錄 btc_price_start，
+        結算時用當前價格與該交易的 btc_price_start 比較。
+
         Args:
-            btc_price_start: 15 分鐘開始時的 BTC 價格
-            btc_price_end: 15 分鐘結束時的 BTC 價格
+            btc_price_current: 當前 BTC 價格（用於比較）
         """
         if not self.open_trades:
             return
-
-        market_result = "UP" if btc_price_end > btc_price_start else "DOWN"
 
         for trade in list(self.open_trades):
             # 檢查是否已超過 15 分鐘
             elapsed = time.time() - trade.entry_time
             if elapsed >= 900:  # 15 分鐘
+                # BUG FIX: 使用該交易記錄的開始價格，而非統一的參數
+                start_price = trade.btc_price_start if trade.btc_price_start else btc_price_current
+                market_result = "UP" if btc_price_current >= start_price else "DOWN"
                 self.settle_trade(trade, market_result)
 
     def reset(self, new_balance: Optional[float] = None):

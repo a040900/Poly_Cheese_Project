@@ -219,7 +219,7 @@ async def settle_loop():
         try:
             bs = binance_feed.state
             if bs.mid > 0 and sim_engine.is_running():
-                sim_engine.auto_settle_expired(bs.mid, bs.mid)
+                sim_engine.auto_settle_expired(bs.mid)  # BUG FIX: 只傳入當前價格，開始價格從交易記錄讀取
         except Exception as e:
             logger.debug(f"結算循環錯誤: {e}")
         await asyncio.sleep(30)  # 每 30 秒檢查一次
