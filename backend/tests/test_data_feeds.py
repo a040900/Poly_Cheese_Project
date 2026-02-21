@@ -26,7 +26,7 @@ BINANCE_REST = "https://api.binance.com/api/v3"
 BINANCE_WS = "wss://stream.binance.com/stream"
 PM_GAMMA = "https://gamma-api.polymarket.com/events"
 PM_WS = "wss://ws-subscriptions-clob.polymarket.com/ws/market"
-POLYGON_RPC = "https://polygon-rpc.com"
+POLYGON_RPC = "https://lb.drpc.live/polygon/AnwbZ8L9jEnOnCICP7S8z6GiDO16DtwR8blu-uF7NYYO"
 CHAINLINK_AGGREGATOR = "0xc907E116054Ad103354f2D350FD2514433D57F6f"
 
 PASS = "✅"

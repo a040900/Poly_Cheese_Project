@@ -15,7 +15,7 @@ load_dotenv(BASE_DIR / ".env")
 # 系統設定
 # ═══════════════════════════════════════════════════════════════
 APP_NAME = "乳酪のBTC預測室 — Polymarket Intelligent Trading Assistant"
-VERSION = "3.2.0"
+VERSION = "3.3.0"
 BACKEND_HOST = os.getenv("BACKEND_HOST", "0.0.0.0")
 BACKEND_PORT = int(os.getenv("BACKEND_PORT", "8888"))
 # 反向代理子路徑（如 "/polycheese"），末尾不含 /，直接部署時留空
@@ -64,7 +64,7 @@ PM_POLL_INTERVAL = 5        # REST API 輪詢間隔（秒）
 # ═══════════════════════════════════════════════════════════════
 # Chainlink / Polygon 設定
 # ═══════════════════════════════════════════════════════════════
-POLYGON_RPC_URL = os.getenv("POLYGON_RPC_URL", "https://polygon-rpc.com")
+POLYGON_RPC_URL = os.getenv("POLYGON_RPC_URL", "https://lb.drpc.live/polygon/AnwbZ8L9jEnOnCICP7S8z6GiDO16DtwR8blu-uF7NYYO")
 CHAINLINK_BTC_USD_AGGREGATOR = os.getenv(
     "CHAINLINK_BTC_USD_AGGREGATOR",
     "0xc907E116054Ad103354f2D350FD2514433D57F6f"
@@ -314,12 +314,6 @@ RISK_MANAGEMENT = {
 # 模擬交易設定
 # ═══════════════════════════════════════════════════════════════
 SIM_INITIAL_BALANCE = float(os.getenv("SIM_INITIAL_BALANCE", "1000.0"))
-
-# ── Polygon / Chainlink (Phase 2 & 3) ─────────────────────────
-# 公用節點可能不穩定，建議換成 Alchemy/Infura
-POLYGON_RPC_URL = os.getenv("POLYGON_RPC_URL", "https://polygon.drpc.org")
-CHAINLINK_BTC_USD_AGGREGATOR = "0xc907E116054Ad103354f2D350FD2514433D57F6f"
-CHAINLINK_POLL_INTERVAL = 30  # 秒
 
 SIM_FEE_PCT = 0.001         # 模擬手續費 0.1%（Phase 1 簡化值）
 
