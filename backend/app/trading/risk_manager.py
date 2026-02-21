@@ -141,6 +141,8 @@ class RiskManager:
         trading_mode: str,
         volatility_pct: float = 0.5,
         contract_price: float = 0.5,
+        unrealized_pnl: float = 0.0,
+        open_exposure: float = 0.0,
     ) -> PositionSizeResult:
         """
         計算建議倉位大小
@@ -164,7 +166,9 @@ class RiskManager:
         mode_cfg = config.TRADING_MODES.get(trading_mode, config.TRADING_MODES["balanced"])
 
         # ── Step 0: 檢查熔斷 ──────────────────────────────────
-        cb_active, cb_reason = self._check_circuit_breakers(balance)
+        cb_active, cb_reason = self._check_circuit_breakers(
+            balance, unrealized_pnl=unrealized_pnl, open_exposure=open_exposure
+        )
         if cb_active:
             return PositionSizeResult(
                 recommended_amount=0.0,
@@ -323,7 +327,7 @@ class RiskManager:
 
     # ── 熔斷保護 ──────────────────────────────────────────────
 
-    def _check_circuit_breakers(self, balance: float) -> Tuple[bool, str]:
+    def _check_circuit_breakers(self, balance: float, unrealized_pnl: float = 0.0, open_exposure: float = 0.0) -> Tuple[bool, str]:
         """
         檢查所有熔斷條件
 
@@ -346,10 +350,12 @@ class RiskManager:
         # ── 檢查 1: 日虧損上限 ────────────────────────────────
         if risk_cfg["daily_loss_limit_enabled"]:
             daily_limit = risk_cfg["daily_loss_limit_pct"]
-            if balance > 0:
-                daily_loss_pct = abs(min(0, self._cb_state.daily_pnl)) / balance * 100
+            total_equity = balance + open_exposure
+            if total_equity > 0:
+                total_daily_pnl = self._cb_state.daily_pnl + unrealized_pnl
+                daily_loss_pct = abs(min(0, total_daily_pnl)) / total_equity * 100
                 if daily_loss_pct >= daily_limit:
-                    reason = f"日虧損觸發 ({daily_loss_pct:.1f}% ≥ {daily_limit}%)"
+                    reason = f"日虧損觸發 ({daily_loss_pct:.1f}% ≥ {daily_limit}%) | 已實現: {self._cb_state.daily_pnl:.1f}, 未實現: {unrealized_pnl:.1f}"
                     self._trigger_circuit_breaker(reason, risk_cfg["circuit_breaker_cooldown"])
                     return True, reason
 

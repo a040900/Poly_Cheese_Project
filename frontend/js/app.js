@@ -373,7 +373,14 @@
 
         const sim = trading.simulation;
         if (sim) {
-            setTextContent('sim-balance', `$${formatNumber(sim.balance, 2)}`);
+            setTextContent('sim-balance', `$${formatNumber(sim.balance + (sim.unrealized_pnl || 0), 2)}`);
+
+            const unPnlEl = document.getElementById('sim-unrealized-pnl');
+            if (unPnlEl) {
+                const unPnl = sim.unrealized_pnl || 0;
+                unPnlEl.textContent = `${unPnl >= 0 ? '+' : ''}$${formatNumber(unPnl, 2)}`;
+                unPnlEl.className = 'sim-stat-value ' + (unPnl >= 0 ? 'positive' : 'negative');
+            }
 
             const pnlEl = document.getElementById('sim-pnl');
             if (pnlEl) {
@@ -382,8 +389,7 @@
                 pnlEl.className = 'sim-stat-value ' + (pnl >= 0 ? 'positive' : 'negative');
             }
 
-            setTextContent('sim-winrate', `${sim.win_rate || 0}%`);
-            setTextContent('sim-trades', `${sim.total_trades || 0}`);
+            setTextContent('sim-exposure', `$${formatNumber(sim.open_exposure || 0, 2)}`);
 
             // 更新模擬開關
             updateSimToggle(sim.is_running);

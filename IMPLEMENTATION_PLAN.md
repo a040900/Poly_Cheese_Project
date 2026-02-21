@@ -327,3 +327,21 @@ cheeseproject/
 > 2. **Market BUY 用 USDC 面值 (Quote)** — 不是 Token 數量
 > 3. **訂單簽名延遲** — Python 端簽名約需 1 秒
 > 4. **市場結果判定** — 依賴 Polymarket 官方結算，非自行判斷
+
+---
+
+## 第五階段：進階交易與動態引擎 (Advanced Trading & Dynamic Rules)
+
+> 📌 **前置條件**: 第一至四階段已穩定執行，並驗證了極端防護 (Anti-FOMO) 機制
+
+### 路線 A：造市商策略擴建 (Maker Strategy)
+- [ ] 修改 `simulator.py` 與 `backtester.py` 支援委託掛單 (Limit Orders)。
+- [ ] 模擬訂單簿 (Order Book) 的深度撮合，計算預期排隊時間。
+- [ ] 實作造市雙邊掛單邏輯，賺取 Spread。
+- [ ] 開發對應的避險機制 (Hedging) 以保護未成交的單邊曝險。
+
+### 路線 B：動態指標引擎 (Dynamic Rule Engine)
+- [ ] 開發一個高度靈活的運算式解析器 (Expression Parser)。
+- [ ] 將信號生成引擎的核心邏輯從硬編碼 (`signal_generator.py`) 轉為配置檔。
+- [ ] 提供 AI Agent 自訂規則的 API (例如動態設定 `RSI > 80` 或覆寫 MA 參數)。
+- [ ] 支援安全沙盒機制，防止 AI 寫出導致無限迴圈或語法錯誤的無效條件。

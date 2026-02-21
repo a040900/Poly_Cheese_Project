@@ -104,6 +104,14 @@ class SimulationEngine(TradingEngine):
         if direction == "NEUTRAL":
             return None
 
+        # ── Step 1: 嚴格校驗資料源 Timestamp (防網路延遲導致的 FOMO) ──
+        # 在 15 分鐘市場中，超過 3 秒的延遲可能意味著市場已經反轉
+        if pm_state and hasattr(pm_state, "last_update"):
+            staleness = time.time() - pm_state.last_update
+            if staleness > 3.0:
+                logger.warning(f"⏳ 數據源延遲過高 ({staleness:.1f}s > 3.0s)，為防追高/追空已放棄開倉！")
+                return None
+
         # Phase 3 Enhancement: 檢查並平倉反向持倉 (Close Position Logic)
         opposing_direction = "SELL_DOWN" if direction == "BUY_UP" else "BUY_UP"
         trades_to_close = [t for t in self.open_trades if t.direction == opposing_direction]
@@ -170,7 +178,22 @@ class SimulationEngine(TradingEngine):
                 contract_price = pm_state.down_price
                 spread = pm_state.down_spread
 
-        # 確定交易金額（Phase 3 P2: 使用 RiskManager 動態計算）
+        # ── 計算未實現損益 (Unrealized PnL) 與總曝險 ──
+        total_unrealized_pnl = 0.0
+        total_open_exposure = 0.0
+        if pm_state:
+            for t in self.open_trades:
+                current_price = t.entry_price
+                if t.direction == "BUY_UP" and getattr(pm_state, "up_price", None):
+                    current_price = pm_state.up_price
+                elif t.direction == "SELL_DOWN" and getattr(pm_state, "down_price", None):
+                    current_price = pm_state.down_price
+                
+                shares = t.quantity / t.entry_price if t.entry_price > 0 else 0
+                t_pnl = (current_price - t.entry_price) * shares
+                total_unrealized_pnl += t_pnl
+                total_open_exposure += (current_price * shares)
+
         if amount is None:
             mode_config = config.TRADING_MODES.get(
                 signal.get("mode", "balanced"),
@@ -178,12 +201,15 @@ class SimulationEngine(TradingEngine):
             )
             confidence = signal.get("confidence", 50)
 
-            # 使用 RiskManager 計算最優倉位
+            # 使用 RiskManager 計算最優倉位 (Phase 3: 加上未實現資料)
             sizing = risk_manager.calculate_position_size(
                 balance=self.balance,
                 signal_confidence=confidence,
                 trading_mode=signal.get("mode", "balanced"),
+                volatility_pct=0.5, # Default since we don't have it directly here
                 contract_price=contract_price,
+                unrealized_pnl=total_unrealized_pnl,
+                open_exposure=total_open_exposure,
             )
 
             # 熔斷檢查
@@ -450,8 +476,23 @@ class SimulationEngine(TradingEngine):
         self.total_pnl = 0.0
         logger.info(f"🔄 模擬帳戶已重置 | 初始資金: ${self.balance:.2f}")
 
-    def get_stats(self) -> dict:
+    def get_stats(self, pm_state=None) -> dict:
         """取得模擬交易統計"""
+        
+        # 計算未實現損益 (Unrealized PnL) 與曝險
+        unrealized_pnl = 0.0
+        open_exposure = 0.0
+        if pm_state and self.open_trades:
+            for ot in self.open_trades:
+                current_value = 0.0
+                if ot.direction == "BUY_UP":
+                    current_value = pm_state.up_bid * ot.shares if pm_state.up_bid else 0
+                elif ot.direction == "SELL_DOWN":
+                    current_value = pm_state.down_bid * ot.shares if pm_state.down_bid else 0
+                
+                if current_value > 0:
+                    unrealized_pnl += (current_value - ot.quantity)
+                open_exposure += ot.quantity
         wins = sum(1 for t in self.trade_history if t.get("won"))
         losses = len(self.trade_history) - wins
         total_closed = len(self.trade_history)
@@ -464,6 +505,8 @@ class SimulationEngine(TradingEngine):
                 (self.total_pnl / self.initial_balance * 100)
                 if self.initial_balance > 0 else 0, 2
             ),
+            "unrealized_pnl": round(unrealized_pnl, 2),
+            "open_exposure": round(open_exposure, 2),
             "total_trades": self.total_trades,
             "closed_trades": total_closed,
             "open_trades": len(self.open_trades),

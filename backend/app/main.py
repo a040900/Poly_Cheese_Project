@@ -309,7 +309,7 @@ def build_dashboard_data() -> dict:
             "sentiment_sensitivity": config.TRADING_MODES.get(
                 signal_generator.current_mode, {}
             ).get("sentiment_sensitivity", 0),
-            "simulation": sim_engine.get_stats(),
+            "simulation": sim_engine.get_stats(pm_state=polymarket_feed.state),
             "recent_trades": sim_engine.get_recent_trades(),
             "pnl_curve": sim_engine.get_pnl_curve(),
         },

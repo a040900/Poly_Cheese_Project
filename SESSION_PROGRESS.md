@@ -873,3 +873,27 @@ Phase 3 P1 — 利用回測引擎大規模搜索最佳 `BIAS_WEIGHTS` 指標權�
 - **Supervisor API**: `POST /api/supervisor/interact` (接收指令/提案)。
 - **Telegram Bot**: 實現 HITL 的即時通知與按鈕核決功能。
 - **Proposal Queue**: 後端暫存待批准指令的隊列系統。
+
+### ✅ Phase 3 P2 Risk Management (v3.3.0) (2026-02-21)
+- **基礎設施升級**: 將公用 RPC URL 切換至更穩定的私人 dRPC 端點 (Polygon)。
+- **反 FOMO 交易邏輯 (Anti-FOMO)**: 在 `signal_generator.py` 中加入了對極端 RSI 區域的保護機制。若 RSI > 75 仍要作多，或 RSI < 25 仍要作空，信號分數將被大幅縮減 (乘以 0.2)。
+- **未實現損益整合**: 
+  - `simulator.py` 增強了 `get_stats()` 方法，將目前的 Polymarket 即時報價 (`pm_state`) 帶入，即時結算所有未平倉單的**「未實現損益」(Unrealized PnL)** 和 **「總曝險」(Open Exposure)**。
+  - 前端 `index.html` 與 `app.js` 新增兩個欄位，分別高光顯示未實現損益與總曝險，讓使用者從 Dashboard 就能掌控風險。
+  - `test_v3_3_fomo_backtest.py` 腳本已經撰寫完成，在本地資料庫 `data/cheesedog_market_data_20260221.db` 的回測中，成功發揮阻擋了多次的 FOMO 行為 (RSI = 93.9 / 7.0 等極端狀況皆被攔截)。
+
+---
+
+### 📅 下階段開發計畫 (Phase 5: Advanced Trading & Dynamic Rules)
+
+#### 路線 A：造市商策略擴建 (Maker Strategy)
+1. **Limit Orders**: 修改 `simulator.py` 與 `backtester.py` 的架構來支援委託掛單。
+2. **Order Book 深度撮合**: 在測試環境/模擬交易中，透過訂單簿計算預期排隊時間與深度。
+3. **Spread 收割邏輯**: 實作提供流動性 (Liquidity Providing) 的雙邊掛單邏輯，賺取買賣價差。
+4. **曝險對沖機制**: 開發保護單邊未成交風險的 Hedging 方法。
+
+#### 路線 B：動態指標引擎 (Dynamic Rule Engine)
+1. **Expression Parser**: 開發一個高度靈活的運算式解析引擎，取代現有的硬編碼交易邏輯。
+2. **配置化驅動**: 將核心技術指標權重、條件，轉移至可動態替換的 JSON 或配置檔。
+3. **AI Agent 自訂 API**: 賦予 AI 直接調整指標門檻的權限（例如呼叫 API 將 RSI > 80 改為 RSI > 85）。
+4. **防呆沙盒 (Sandbox)**: 確保 AI 生成的運算式不會導致無限迴圈或報錯。

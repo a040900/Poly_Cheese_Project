@@ -672,6 +672,23 @@ class SignalGenerator:
                 raw_score, sentiment, mode_config
             )
 
+        # ── Step 2: Anti-FOMO 防追高/追空過濾器 (Override Rule) ───────────────────────
+        # 若是強勢看多，但 RSI 已進入超買區 (>75)，極大懲罰分數，避免追高
+        # 若是強勢看空，且 RSI 進入超賣區 (<25)，亦懲罰分數，避免追空
+        # 這替未來的「動態公式引擎」預留了擴展點
+        rsi_data = indicators.get("rsi", {})
+        rsi_val = rsi_data.get("value", 50) if isinstance(rsi_data, dict) else 50
+        anti_fomo_applied = False
+        
+        if score > 0 and rsi_val > 75:
+            score *= 0.2
+            anti_fomo_applied = True
+            logger.warning(f"🛡️ Anti-FOMO 觸發: 偵測到 RSI={rsi_val:.1f} 進入超買區，大幅調降作多分數以避免追高陷阱。")
+        elif score < 0 and rsi_val < 25:
+            score *= 0.2
+            anti_fomo_applied = True
+            logger.warning(f"🛡️ Anti-FOMO 觸發: 偵測到 RSI={rsi_val:.1f} 進入超賣區，大幅調降作空分數以避免追低陷阱。")
+
         # 決定方向（使用調整後的分數）
         if score >= threshold:
             raw_direction = "BUY_UP"

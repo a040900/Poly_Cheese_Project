@@ -36,15 +36,8 @@ class ChainlinkState:
         self.error: Optional[str] = None
 
 
-# 備用 Polygon RPC URL 列表（公共免費節點）
-_POLYGON_RPC_FALLBACKS = [
-    "https://polygon.drpc.org",
-    "https://polygon.rpc.subquery.network/public",
-    "https://polygon-bor-rpc.publicnode.com",
-    "https://1rpc.io/matic",
-    "https://rpc.ankr.com/polygon",
-]
-
+# 已廢棄備用 Polygon RPC URL 列表（公共免費節點），改用私有節點
+# 從 config 中直接取得用戶專屬的高效能 RPC URL
 
 class ChainlinkFeed(Component):
     """Chainlink 鏈上價格訂閱管理器"""
@@ -92,16 +85,11 @@ class ChainlinkFeed(Component):
 
     def _current_rpc_url(self) -> str:
         """取得當前使用的 RPC URL"""
-        return _POLYGON_RPC_FALLBACKS[self._rpc_index % len(_POLYGON_RPC_FALLBACKS)]
+        return config.POLYGON_RPC_URL
 
     def _rotate_rpc(self):
-        """輪換到下一個 RPC URL"""
-        old_url = self._current_rpc_url()
-        self._rpc_index = (self._rpc_index + 1) % len(_POLYGON_RPC_FALLBACKS)
-        new_url = self._current_rpc_url()
-        if old_url != new_url:
-            logger.info(f"🔄 Chainlink RPC 輪換: {old_url} → {new_url}")
-
+        """（已停用）私有 RPC 不再輪換"""
+        logger.warning("⚠️ Chainlink RPC 發生連續失敗，但由於使用專屬私有節點，將不進行輪換。")
     async def _eth_call(self, data: str) -> Optional[str]:
         """執行以太坊 RPC 呼叫（含備用 RPC 輪換）"""
         payload = {

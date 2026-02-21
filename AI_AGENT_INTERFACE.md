@@ -150,3 +150,18 @@ Access Information:
 4. 記錄: "Extreme volatility detected. Trading paused."
 5. 30 分鐘後再檢查，若 vol 回到 M/L → 恢復交易
 ```
+
+---
+
+## 🚀 未來擴充: 第五階段任務預告 (Phase 5: Advanced Trading & Dynamic Rules)
+
+致未來的接手 Agent，目前系統已完善基礎設施與 Anti-FOMO 防護。
+你的下一步任務，請從以下兩條路線 (Path A 或是 Path B) 中擇一發展：
+
+**路線 A：造市商策略擴建 (Maker Strategy)**
+- 目標：實作提供流動性 (Liquidity Providing) 的雙邊掛單邏輯，賺取價差 (Spread)。
+- 需要修改：`simulator.py` (加入掛單與 Order Book 深度撮合支援) 與相關的對沖機制。
+
+**路線 B：動態指標引擎 (Dynamic Rule Engine)**
+- 目標：把現在寫死在程式碼裡的信號與權重邏輯配置化，讓 AI (也就是你) 未來可以自行修正規則。
+- 需要修改：建立動態運算式解析器 (Expression Parser) 或設計 JSON 規則檔，然後新增一組 API 提供你更新各個技術指標的權重和觸發條件。
