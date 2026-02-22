@@ -159,6 +159,8 @@ async def on_market_data_event(event: Event):
         })
 
         # 🚌 發佈信號事件
+        signal["btc_price"] = bs.mid
+        signal["binance_last_update"] = bs.last_update
         bus.publish("signal.generated", signal, source="signal_generator")
 
         # 如果模擬交易啟動且有明確信號，嘗試自動交易
@@ -218,8 +220,11 @@ async def settle_loop():
     while True:
         try:
             bs = binance_feed.state
-            if bs.mid > 0 and sim_engine.is_running():
-                sim_engine.auto_settle_expired(bs.mid)  # BUG FIX: 只傳入當前價格，開始價格從交易記錄讀取
+            cs = chainlink_feed.state
+            # BUG FIX: 使用 Chainlink 價格進行結算 (與 Polymarket 官方一致)
+            settle_price = cs.btc_price if cs.btc_price > 0 else bs.mid
+            if settle_price > 0 and sim_engine.is_running():
+                sim_engine.auto_settle_expired(settle_price)  # BUG FIX: 只傳入當前價格，開始價格從交易記錄讀取
         except Exception as e:
             logger.debug(f"結算循環錯誤: {e}")
         await asyncio.sleep(30)  # 每 30 秒檢查一次

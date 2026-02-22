@@ -106,12 +106,15 @@ class SimulationEngine(TradingEngine):
         if direction == "NEUTRAL":
             return None
 
-        # ── Step 1: 嚴格校驗資料源 Timestamp (防網路延遲導致的 FOMO) ──
-        # 在 15 分鐘市場中，超過 3 秒的延遲可能意味著市場已經反轉
-        if pm_state and hasattr(pm_state, "last_update"):
-            staleness = time.time() - pm_state.last_update
-            if staleness > 3.0:
-                logger.warning(f"⏳ 數據源延遲過高 ({staleness:.1f}s > 3.0s)，為防追高/追空已放棄開倉！")
+        # ── Step 1: Anti-FOMO 延遲檢查 (已優化) ──
+        # 修正說明：
+        # - Polymarket 更新週期為 30 秒，不適合作為延遲檢查依據
+        # - 改用 Binance (即時數據) 做延遲檢查
+        # - 閾值放寬至 5 秒，保留網路波動緩衝
+        if signal.get("binance_last_update"):
+            staleness = time.time() - signal["binance_last_update"]
+            if staleness > 5.0:
+                logger.warning(f"⏳ Binance 數據延遲過高 ({staleness:.1f}s > 5.0s)，為防追高/追空已放棄開倉！")
                 return None
 
         # Phase 3 Enhancement: 檢查並平倉反向持倉 (Close Position Logic)
@@ -210,7 +213,6 @@ class SimulationEngine(TradingEngine):
                 trading_mode=signal.get("mode", "balanced"),
                 volatility_pct=0.5, # Default since we don't have it directly here
                 contract_price=contract_price,
-            btc_price_start=signal.get("btc_price"),  # BUG FIX: 傳入開倉時的 BTC 價格
                 unrealized_pnl=total_unrealized_pnl,
                 open_exposure=total_open_exposure,
             )
