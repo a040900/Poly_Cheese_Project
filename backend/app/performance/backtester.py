@@ -323,6 +323,14 @@ class Backtester:
         # 計算 PnL（Phase 2.1: 使用實際合約價格計算回報率）
         exit_fee = 0.0
         cp = trade.contract_price if trade.contract_price > 0 else 0.5
+        
+        # 🔧 修復：確保合約價格在合理範圍內 (0.05 ~ 0.95)
+        # 超出此範圍的價格代表市場極端偏差，數據可能異常
+        if cp < 0.05 or cp > 0.95:
+            logger.warning(f"⚠️ 合約價格極端: {cp:.4f}，跳過交易 #{trade.trade_id}")
+            self._open_trades = [t for t in self._open_trades if t.trade_id != trade.trade_id]
+            return
+        
         if won:
             return_rate = (1.0 / cp) - 1.0
             gross_profit = trade.quantity * return_rate
@@ -335,7 +343,6 @@ class Backtester:
             self._balance += trade.quantity + pnl
         else:
             pnl = -trade.quantity
-
         total_fee = trade.entry_fee + exit_fee
 
         # 記錄到 PerformanceTracker
@@ -357,7 +364,7 @@ class Backtester:
         # 從持倉移除
         self._open_trades = [t for t in self._open_trades if t.trade_id != trade.trade_id]
 
-    def get_last_result(self) -> Optional[dict]:
+        def get_last_result(self) -> Optional[dict]:
         """取得最近一次回測結果"""
         return self._result
 

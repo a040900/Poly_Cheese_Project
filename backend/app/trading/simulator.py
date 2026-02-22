@@ -69,9 +69,55 @@ class SimulationEngine(TradingEngine):
         logger.info(f"💰 模擬交易引擎已初始化 | 初始資金: ${initial_balance:.2f} USDC")
 
     def start(self):
-        """啟動模擬交易"""
+        """啟動模擬交易並從資料庫載入歷史"""
         self._running = True
-        logger.info("🟢 模擬交易引擎已啟動")
+        # 從資料庫載入已結算的歷史交易
+        self._load_history_from_db()
+        logger.info(f"🟢 模擬交易引擎已啟動 | 歷史交易: {len(self.trade_history)} 筆 | 餘額: ${self.balance:.2f}")
+
+    def _load_history_from_db(self):
+        """從資料庫載入歷史交易記錄"""
+        try:
+            import json
+            # 使用 database 模組的 _connect 方法
+            with db._connect() as conn:
+                rows = conn.execute(
+                    """SELECT * FROM trades 
+                       WHERE trade_type = 'simulation' AND status = 'closed' 
+                       ORDER BY exit_time DESC LIMIT 500"""
+                ).fetchall()
+                if rows:
+                    for row in rows:
+                        row_dict = dict(row)
+                        # 提取市場標題
+                        market_title = "BTC 15m UP/DOWN"
+                        if row_dict.get("metadata_json"):
+                            try:
+                                meta = json.loads(row_dict["metadata_json"])
+                                market_title = meta.get("market_title", "BTC 15m UP/DOWN")
+                            except:
+                                pass
+                        # 重建 trade_history
+                        self.trade_history.append({
+                            "trade_id": row_dict["id"],
+                            "direction": row_dict["direction"],
+                            "quantity": row_dict["quantity"],
+                            "pnl": row_dict["pnl"],
+                            "won": row_dict["pnl"] > 0,
+                            "entry_time": row_dict["entry_time"],
+                            "exit_time": row_dict["exit_time"],
+                            "contract_price": row_dict["entry_price"],
+                            "market_title": market_title,
+                        })
+                        self.total_pnl += row_dict["pnl"]
+                    # 倒序讓最新的在後面
+                    self.trade_history = list(reversed(self.trade_history))
+                    # 重新計算餘額
+                    self.balance = self.initial_balance + self.total_pnl
+                    self.total_trades = len(self.trade_history)
+                    logger.info(f"📂 已載入 {len(self.trade_history)} 筆歷史交易 | 總 PnL: ${self.total_pnl:.2f}")
+        except Exception as e:
+            logger.warning(f"載入歷史交易失敗: {e}")
 
     def stop(self):
         """停止模擬交易"""

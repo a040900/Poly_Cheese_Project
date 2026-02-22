@@ -731,6 +731,15 @@ async def api_backtest_compare(data: dict = None):
             initial_balance=data.get("initial_balance", 1000.0),
             limit=data.get("limit", 5000),
         )
+        # 將英文模式 key 轉換為中文名稱
+        if "comparison" in result:
+            new_comparison = {}
+            for mode, stats in result["comparison"].items():
+                mode_name = config.TRADING_MODES.get(mode, {}).get("name", mode)
+                stats["mode_name"] = mode_name
+                stats["mode_key"] = mode  # 保留原始 key
+                new_comparison[mode] = stats
+            result["comparison"] = new_comparison
         return result
     except Exception as e:
         logger.error(f"回測比較失敗: {e}")
