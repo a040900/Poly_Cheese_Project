@@ -602,7 +602,18 @@ async def get_signal_history(limit: int = 50):
 @app.get("/api/trades")
 async def get_trades(trade_type: str = "simulation", limit: int = 50):
     """取得交易記錄"""
-    return db.get_trades(trade_type, limit)
+    trades = db.get_trades(trade_type, limit)
+    # 注入市場標題從 metadata_json 到頂層，方便前端顯示
+    for t in trades:
+        if t.get("metadata_json"):
+            try:
+                meta = json.loads(t["metadata_json"])
+                t["market_title"] = meta.get("market_title", "BTC 15m UP/DOWN")
+            except Exception:
+                t["market_title"] = "BTC 15m UP/DOWN"
+        else:
+            t["market_title"] = "BTC 15m UP/DOWN"
+    return trades
 
 
 @app.get("/api/trades/stats")

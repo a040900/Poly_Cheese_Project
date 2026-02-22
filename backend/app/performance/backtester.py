@@ -178,10 +178,17 @@ class Backtester:
             # （校準模式下禁用此功能，以測試不同權重的效果）
             if self.config.use_saved_signals:
                 saved_score = snap.get("bias_score")
-                saved_direction = snap.get("signal")
-                if saved_score is not None and saved_direction:
+                if saved_score is not None:
                     signal["score"] = saved_score
-                    signal["direction"] = saved_direction
+                    # 重新根據當前模式的門檻判定方向，而不是直接使用快照中的方向
+                    # 這樣不同模式（門檻不同）才會產生不同的回測結果
+                    threshold = self._signal_gen.get_mode_config()["signal_threshold"]
+                    if saved_score >= threshold:
+                        signal["direction"] = "BUY_UP"
+                    elif saved_score <= -threshold:
+                        signal["direction"] = "SELL_DOWN"
+                    else:
+                        signal["direction"] = "NEUTRAL"
 
             # ── 交易邏輯 ──────────────────────────────────────
             if signal["direction"] != "NEUTRAL" and len(self._open_trades) < self.config.max_open_trades:
