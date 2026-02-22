@@ -490,6 +490,16 @@ class SimulationEngine(TradingEngine):
         self.total_pnl = 0.0
         logger.info(f"🔄 模擬帳戶已重置 | 初始資金: ${self.balance:.2f}")
 
+    def get_snapshot(self) -> dict:
+        """取得當前引擎狀態快照（供 AI Engine 使用）"""
+        return {
+            "balance": round(self.balance, 2),
+            "total_pnl": round(self.total_pnl, 2),
+            "open_trades": len(self.open_trades),
+            "total_trades": self.total_trades,
+            "is_running": self._running,
+        }
+
     def get_stats(self, pm_state=None) -> dict:
         """取得模擬交易統計"""
         

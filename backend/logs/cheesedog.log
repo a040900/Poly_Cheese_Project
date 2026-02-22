@@ -1,0 +1,86 @@
+2026-02-21 17:56:52 | cheesedog.trading.simulator    | INFO    | 💰 模擬交易引擎已初始化 | 初始資金: $1000.00 USDC
+2026-02-21 17:56:52 | cheesedog.trading.simulator    | INFO    | 💰 模擬交易引擎已初始化 | 初始資金: $1000.00 USDC
+INFO:     Started server process [110367]
+INFO:     Waiting for application startup.
+2026-02-21 17:56:52 | cheesedog.main                 | INFO    | ============================================================
+2026-02-21 17:56:52 | cheesedog.main                 | INFO    | 🧀 乳酪のBTC預測室 — Polymarket Intelligent Trading Assistant v3.3.0
+2026-02-21 17:56:52 | cheesedog.main                 | INFO    |    啟動中...
+2026-02-21 17:56:52 | cheesedog.main                 | INFO    | ============================================================
+2026-02-21 17:56:52 | cheesedog.core.bus             | INFO    | 🚌 MessageBus 已啟動
+2026-02-21 17:56:52 | cheesedog.main                 | INFO    | 📬 已註冊事件驅動信號生成 (binance.kline + binance.orderbook)
+2026-02-21 17:56:52 | cheesedog.feeds.binance        | INFO    | 🔄 [feeds.binance] INITIALIZING → READY (初始化完成)
+2026-02-21 17:56:52 | cheesedog.feeds.binance        | INFO    | 🟢 啟動 Binance 數據訂閱 [BTCUSDT]
+2026-02-21 17:56:52 | cheesedog.feeds.binance        | INFO    | 📊 已載入 100 根歷史 K 線
+2026-02-21 17:56:52 | cheesedog.feeds.binance        | INFO    | 🔄 [feeds.binance] READY → RUNNING (開始運行)
+2026-02-21 17:56:52 | cheesedog.feeds.polymarket     | INFO    | 🔄 [feeds.polymarket] INITIALIZING → READY (初始化完成)
+2026-02-21 17:56:52 | cheesedog.feeds.polymarket     | INFO    | 🟢 啟動 Polymarket 數據訂閱
+2026-02-21 17:56:52 | cheesedog.feeds.binance        | INFO    | 📖 啟動訂單簿輪詢 [BTCUSDT] 每 5 秒
+2026-02-21 17:56:52 | cheesedog.feeds.polymarket     | INFO    | 📊 Polymarket 市場: Bitcoin Up or Down - February 21, 12:45PM-1:00PM ET
+   UP Token: 7012088349469863...
+   DN Token: 1109163230378565...
+2026-02-21 17:56:52 | cheesedog.feeds.polymarket     | INFO    | ✅ 已獲取 Polymarket 市場資訊: btc-updown-15m-1771695900
+2026-02-21 17:56:52 | cheesedog.feeds.polymarket     | INFO    | 🔄 [feeds.polymarket] READY → RUNNING (開始運行)
+2026-02-21 17:56:52 | cheesedog.feeds.chainlink      | INFO    | 🔄 [feeds.chainlink] INITIALIZING → READY (初始化完成)
+2026-02-21 17:56:52 | cheesedog.feeds.chainlink      | INFO    | 🟢 啟動 Chainlink BTC/USD 價格訂閱
+2026-02-21 17:56:52 | cheesedog.feeds.binance        | INFO    | 🔗 Binance WebSocket 已連線 [BTCUSDT]
+2026-02-21 17:56:53 | cheesedog.feeds.chainlink      | INFO    | 📊 Chainlink BTC/USD 精度: 8
+2026-02-21 17:56:53 | cheesedog.feeds.chainlink      | INFO    | 🔄 [feeds.chainlink] READY → RUNNING (開始運行)
+2026-02-21 17:56:53 | cheesedog.trading.simulator    | INFO    | 🟢 模擬交易引擎已啟動
+2026-02-21 17:56:53 | cheesedog.supervisor.auth      | INFO    | 🛡️ SignalGenerator 已注入 AuthorizationManager
+2026-02-21 17:56:53 | cheesedog.main                 | INFO    | 🛡️ Phase 4 Supervisor 模組已就緒
+2026-02-21 17:56:53 | cheesedog.llm.engine           | INFO    | ⚪ AI 監控已停用 (config.AI_MONITOR_ENABLED=False)
+2026-02-21 17:56:53 | cheesedog.telegram             | INFO    | 📋 已註冊 8 個指令 + 1 個回調處理器
+2026-02-21 17:56:53 | cheesedog.feeds.polymarket     | INFO    | 🔗 Polymarket WebSocket 已連線
+2026-02-21 17:56:53 | httpx                          | INFO    | HTTP Request: POST https://api.telegram.org/bot8207492753:AAFnRcmR91pcriYoyF3zZ3HnNgIden3hH2E/getMe "HTTP/1.1 200 OK"
+2026-02-21 17:56:53 | cheesedog.telegram             | INFO    | 📬 已訂閱 Supervisor 事件
+2026-02-21 17:56:53 | cheesedog.telegram             | INFO    | 🟢 Telegram Bot 已啟動
+2026-02-21 17:56:54 | httpx                          | INFO    | HTTP Request: POST https://api.telegram.org/bot8207492753:AAFnRcmR91pcriYoyF3zZ3HnNgIden3hH2E/deleteWebhook "HTTP/1.1 200 OK"
+2026-02-21 17:56:54 | telegram.ext.Application       | INFO    | Application started
+2026-02-21 17:56:54 | httpx                          | INFO    | HTTP Request: POST https://api.telegram.org/bot8207492753:AAFnRcmR91pcriYoyF3zZ3HnNgIden3hH2E/sendMessage "HTTP/1.1 400 Bad Request"
+2026-02-21 17:56:54 | cheesedog.telegram             | ERROR   | Telegram 發送失敗: Chat not found
+2026-02-21 17:56:54 | cheesedog.main                 | INFO    | ✅ 所有模組已啟動，系統就緒！
+2026-02-21 17:56:54 | cheesedog.main                 | INFO    | 🚌 信號引擎已切換至事件驅動模式 (取代舊版 10 秒輪詢)
+INFO:     Application startup complete.
+ERROR:    [Errno 98] error while attempting to bind on address ('0.0.0.0', 8888): address already in use
+INFO:     Waiting for application shutdown.
+2026-02-21 17:56:54 | cheesedog.main                 | INFO    | 🔴 正在關閉系統...
+2026-02-21 17:56:54 | cheesedog.trading.simulator    | INFO    | 🔴 模擬交易引擎已停止
+2026-02-21 17:56:54 | cheesedog.llm.engine           | WARNING | ⚠️ 非法狀態轉換: INITIALIZING → STOPPED (reason: 已停止)
+2026-02-21 17:56:54 | cheesedog.llm.engine           | INFO    | 🔴 AI 監控引擎已停止
+2026-02-21 17:57:00 | httpx                          | INFO    | HTTP Request: POST https://api.telegram.org/bot8207492753:AAFnRcmR91pcriYoyF3zZ3HnNgIden3hH2E/getUpdates "HTTP/1.1 409 Conflict"
+2026-02-21 17:57:00 | telegram.ext.Updater           | ERROR   | Error while calling `get_updates` one more time to mark all fetched updates. Suppressing error to ensure graceful shutdown. When polling for updates is restarted, updates may be fetched again. Please adjust timeouts via `ApplicationBuilder` or the parameter `get_updates_request` of `Bot`.
+Traceback (most recent call last):
+  File "/root/.openclaw/workspace/Poly_Cheese_Project/venv/lib/python3.12/site-packages/telegram/ext/_updater.py", line 400, in _get_updates_cleanup
+    await self.bot.get_updates(
+  File "/root/.openclaw/workspace/Poly_Cheese_Project/venv/lib/python3.12/site-packages/telegram/ext/_extbot.py", line 671, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/.openclaw/workspace/Poly_Cheese_Project/venv/lib/python3.12/site-packages/telegram/_bot.py", line 4860, in get_updates
+    await self._post(
+  File "/root/.openclaw/workspace/Poly_Cheese_Project/venv/lib/python3.12/site-packages/telegram/_bot.py", line 703, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/root/.openclaw/workspace/Poly_Cheese_Project/venv/lib/python3.12/site-packages/telegram/ext/_extbot.py", line 369, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/.openclaw/workspace/Poly_Cheese_Project/venv/lib/python3.12/site-packages/telegram/_bot.py", line 732, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+  File "/root/.openclaw/workspace/Poly_Cheese_Project/venv/lib/python3.12/site-packages/telegram/request/_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/.openclaw/workspace/Poly_Cheese_Project/venv/lib/python3.12/site-packages/telegram/request/_baserequest.py", line 375, in _request_wrapper
+    raise exception
+telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2026-02-21 17:57:00 | telegram.ext.Application       | INFO    | Application is stopping. This might take a moment.
+2026-02-21 17:57:00 | telegram.ext.Application       | INFO    | Application.stop() complete
+2026-02-21 17:57:00 | cheesedog.telegram             | INFO    | 🔴 Telegram Bot 已停止
+2026-02-21 17:57:00 | cheesedog.feeds.binance        | INFO    | 🔄 [feeds.binance] RUNNING → STOPPED (已停止)
+2026-02-21 17:57:00 | cheesedog.feeds.binance        | INFO    | 🔴 Binance 數據訂閱已停止
+2026-02-21 17:57:00 | cheesedog.feeds.polymarket     | INFO    | 🔄 [feeds.polymarket] RUNNING → STOPPED (已停止)
+2026-02-21 17:57:00 | cheesedog.feeds.polymarket     | INFO    | 🔴 Polymarket 數據訂閱已停止
+2026-02-21 17:57:00 | cheesedog.feeds.chainlink      | INFO    | 🔄 [feeds.chainlink] RUNNING → STOPPED (已停止)
+2026-02-21 17:57:00 | cheesedog.feeds.chainlink      | INFO    | 🔴 Chainlink 價格訂閱已停止
+2026-02-21 17:57:00 | cheesedog.core.bus             | INFO    | 🛑 MessageBus 已停止 (發佈: 306, 處理: 6, 錯誤: 0)
+2026-02-21 17:57:00 | cheesedog.main                 | INFO    | 👋 系統已安全關閉
+INFO:     Application shutdown complete.

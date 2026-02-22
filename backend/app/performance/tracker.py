@@ -268,6 +268,18 @@ class PerformanceTracker:
             },
         }
 
+    def get_snapshot(self) -> dict:
+        """取得當前績效快照（供 AI Engine 使用）"""
+        return {
+            "initial_balance": self.initial_balance,
+            "current_equity": round(self.current_equity, 2),
+            "total_pnl": round(self.total_pnl, 2),
+            "total_trades": self.total_trades,
+            "win_rate": self.win_rate(),
+            "profit_factor": self.profit_factor(),
+            "max_drawdown": self.max_drawdown(),
+        }
+
     def reset(self, initial_balance: Optional[float] = None):
         """重置追蹤器"""
         if initial_balance is not None:

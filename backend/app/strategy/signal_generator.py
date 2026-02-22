@@ -753,6 +753,17 @@ class SignalGenerator:
 
         return signal
 
+    def get_snapshot(self) -> dict:
+        """取得當前信號狀態快照（供 AI Engine 使用）"""
+        return {
+            "last_signal": self.last_signal,
+            "last_score": self.last_score,
+            "current_mode": self.current_mode,
+            "mode_name": self.get_mode_config()["name"],
+            "last_sentiment": self.last_sentiment,
+            "cro_stats": self.get_cro_stats(),
+        }
+
     def get_risk_assessment(self, signal: dict, balance: float) -> dict:
         """
         基於信號和當前餘額進行風險評估

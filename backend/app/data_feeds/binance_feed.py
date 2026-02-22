@@ -16,6 +16,7 @@ from typing import Optional, Callable
 import aiohttp
 
 from app import config
+from app.database import db
 from app.core.state import Component, ComponentState
 from app.core.event_bus import bus
 
@@ -207,11 +208,16 @@ class BinanceFeed(Component):
         }
         self.state.cur_kline = candle
 
-        # K 線收盤時新增到數組
+        # K 線收盤時新增到數組並持久化到 DB
         is_closed = k["x"]
         if is_closed:
             self.state.klines.append(candle)
             self.state.klines = self.state.klines[-config.KLINE_MAX:]
+            # 持久化到資料庫
+            try:
+                db.save_kline(self.symbol, config.KLINE_INTERVAL, candle)
+            except Exception as e:
+                logger.error(f"❌ 持久化 K 線失敗: {e}")
 
         # 🚌 發佈事件到 MessageBus
         bus.publish(

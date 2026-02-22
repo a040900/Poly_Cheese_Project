@@ -166,6 +166,17 @@ class LiveTradingEngine(TradingEngine):
 
     # ── 交易執行 ──────────────────────────────────────────────
 
+    def get_snapshot(self) -> dict:
+        \"\"\"取得當前引擎狀態快照（供 AI Engine 使用）\"\"\"
+        return {
+            \"balance\": round(self.get_balance(), 2),
+            \"total_pnl\": round(self.total_pnl, 2),
+            \"open_trades\": len(self.open_trades),
+            \"total_trades\": self.total_trades,
+            \"is_running\": self._running,
+            \"engine_type\": \"live\"
+        }
+
     def execute_trade(
         self,
         signal: dict,
