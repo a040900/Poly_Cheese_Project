@@ -193,6 +193,16 @@ class ChainlinkFeed(Component):
             logger.error(f"價格解析錯誤: {e}")
             self.state.error = str(e)
 
+    async def fetch_current_price(self) -> Optional[float]:
+        """
+        即時獲取 Chainlink 最新價格（用於結算等關鍵時刻）
+        
+        Returns:
+            當前 BTC/USD 價格，如果獲取失敗則返回 None
+        """
+        await self._fetch_latest_price()
+        return self.state.btc_price
+
     async def _price_poller(self):
         """定期輪詢 Chainlink 價格"""
         while self._running:

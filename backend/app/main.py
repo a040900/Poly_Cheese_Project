@@ -216,15 +216,22 @@ async def broadcast_loop():
 async def settle_loop():
     """
     定期檢查並結算到期交易（保留定時器，因為結算依賴時間而非事件）
+    
+    Phase 3 優化：結算時即時查詢 Chainlink 價格，確保與 Polymarket 官方一致
     """
     while True:
         try:
             bs = binance_feed.state
-            cs = chainlink_feed.state
-            # BUG FIX: 使用 Chainlink 價格進行結算 (與 Polymarket 官方一致)
-            settle_price = cs.btc_price if cs.btc_price > 0 else bs.mid
+            
+            # 🔧 即時查詢 Chainlink 價格（確保結算準確性）
+            chainlink_price = await chainlink_feed.fetch_current_price()
+            
+            # 優先使用即時查詢的 Chainlink 價格，失敗則 fallback 到快取或 Binance
+            settle_price = chainlink_price or chainlink_feed.state.btc_price or bs.mid
+            
             if settle_price > 0 and sim_engine.is_running():
-                sim_engine.auto_settle_expired(settle_price)  # BUG FIX: 只傳入當前價格，開始價格從交易記錄讀取
+                sim_engine.auto_settle_expired(settle_price)
+                logger.debug(f"結算檢查 | Chainlink 價格: ${chainlink_price:.2f} | 結算價: ${settle_price:.2f}")
         except Exception as e:
             logger.debug(f"結算循環錯誤: {e}")
         await asyncio.sleep(30)  # 每 30 秒檢查一次
