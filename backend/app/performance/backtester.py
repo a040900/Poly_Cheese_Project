@@ -1,4 +1,4 @@
-"""
+""" 
 🧀 CheeseDog - 回測引擎 (步驟 12b)
 利用歷史市場快照重播策略邏輯，驗證信號生成和交易模擬的有效性。
 
@@ -8,12 +8,12 @@
 - 產出 PerformanceTracker 報告
 
 回測流程:
-    1. 從 DB 載入歷史 market_snapshots (含 btc_price, indicators_json)
-    2. 逐筆還原 K 線和訂單簿狀態 (簡化版)
-    3. 送入 SignalGenerator.generate_signal()
-    4. 根據信號進行模擬交易
-    5. 15 分鐘後自動結算
-    6. 輸出 PerformanceTracker 報告
+1. 從 DB 載入歷史 market_snapshots (含 btc_price, indicators_json)
+2. 逐筆還原 K 線和訂單簿狀態 (簡化版)
+3. 送入 SignalGenerator.generate_signal()
+4. 根據信號進行模擬交易
+5. 15 分鐘後自動結算
+6. 輸出 PerformanceTracker 報告
 """
 
 import time
@@ -36,12 +36,12 @@ class BacktestConfig:
     """回測配置"""
     initial_balance: float = 1000.0
     trading_mode: str = "balanced"
-    max_open_trades: int = 1           # 同時最多持倉數
+    max_open_trades: int = 1  # 同時最多持倉數
     settlement_seconds: float = 900.0  # 結算時間 (15 分鐘)
-    use_fees: bool = True              # 是否計算手續費
-    use_profit_filter: bool = True     # 是否啟用利潤過濾器
-    use_saved_signals: bool = True     # 是否使用快照中保存的信號分數（校準時設為 False）
-    disable_cooldown: bool = False     # 是否禁用信號冷卻期（校準時設為 True）
+    use_fees: bool = True  # 是否計算手續費
+    use_profit_filter: bool = True  # 是否啟用利潤過濾器
+    use_saved_signals: bool = True  # 是否使用快照中保存的信號分數（校準時設為 False）
+    disable_cooldown: bool = False  # 是否禁用信號冷卻期（校準時設為 True）
 
 
 @dataclass
@@ -49,19 +49,18 @@ class BacktestTrade:
     """回測中的虛擬交易"""
     trade_id: int
     direction: str
-    entry_price: float      # 進場時 BTC 中價
+    entry_price: float  # 進場時 BTC 中價
     quantity: float
     entry_fee: float
     entry_time: float
     trading_mode: str
     signal_score: float
-    contract_price: float = 0.5   # Polymarket 合約價格
+    contract_price: float = 0.5  # Polymarket 合約價格
 
 
 class Backtester:
     """
     歷史回測引擎
-
     從資料庫載入歷史市場快照，模擬策略運行，
     輸出完整績效報告。
     """
@@ -118,7 +117,6 @@ class Backtester:
 
         # 建構模擬用的 K 線窗口
         kline_window: List[dict] = []
-
         prev_btc_price = 0.0
 
         for snap in snapshots:
@@ -170,8 +168,11 @@ class Backtester:
                 self._signal_gen._last_sell_time = 0.0
 
             signal = self._signal_gen.generate_signal(
-                bids=[], asks=[], mid=btc_price,
-                trades=[], klines=kline_window,
+                bids=[],
+                asks=[],
+                mid=btc_price,
+                trades=[],
+                klines=kline_window,
             )
 
             # 如果快照有保存的指標分數，可以優先使用
@@ -223,7 +224,6 @@ class Backtester:
                 "end": snapshots[-1].get("timestamp"),
             },
         }
-
         self._result = report
 
         logger.info(
@@ -233,7 +233,6 @@ class Backtester:
             f"夏普: {report['summary']['sharpe_ratio']} | "
             f"耗時: {elapsed:.1f}s"
         )
-
         return report
 
     # ── 內部方法 ──────────────────────────────────────────────
@@ -248,13 +247,13 @@ class Backtester:
             logger.error(f"❌ 載入歷史快照失敗: {e}")
             return []
 
-    def _open_trade(self, signal: dict, btc_price: float, ts: float,
-                    pm_up: float = None, pm_down: float = None):
+    def _open_trade(self, signal: dict, btc_price: float, ts: float, pm_up: float = None, pm_down: float = None):
         """開倉（Phase 2.1: 含利潤過濾器）"""
         mode_config = config.TRADING_MODES.get(
             self.config.trading_mode,
             config.TRADING_MODES["balanced"],
         )
+
         confidence = signal.get("confidence", 50)
         amount = self._balance * mode_config["max_position_pct"] * (confidence / 100)
 
@@ -268,6 +267,12 @@ class Backtester:
             contract_price = pm_up
         elif direction == "SELL_DOWN" and pm_down and pm_down > 0:
             contract_price = pm_down
+
+        # 🔧 修復：過濾極端合約價格 (0.05 ~ 0.95)
+        # 超出此範圍代表市場極端偏差，可能導致不合理的回報率
+        if contract_price < 0.05 or contract_price > 0.95:
+            logger.debug(f"跳過極端價格交易 | 方向: {direction} | 價格: {contract_price:.4f}")
+            return
 
         # 利潤過濾器
         if self.config.use_profit_filter and config.PROFIT_FILTER_ENABLED:
@@ -323,14 +328,14 @@ class Backtester:
         # 計算 PnL（Phase 2.1: 使用實際合約價格計算回報率）
         exit_fee = 0.0
         cp = trade.contract_price if trade.contract_price > 0 else 0.5
-        
+
         # 🔧 修復：確保合約價格在合理範圍內 (0.05 ~ 0.95)
         # 超出此範圍的價格代表市場極端偏差，數據可能異常
         if cp < 0.05 or cp > 0.95:
             logger.warning(f"⚠️ 合約價格極端: {cp:.4f}，跳過交易 #{trade.trade_id}")
             self._open_trades = [t for t in self._open_trades if t.trade_id != trade.trade_id]
             return
-        
+
         if won:
             return_rate = (1.0 / cp) - 1.0
             gross_profit = trade.quantity * return_rate
@@ -364,7 +369,7 @@ class Backtester:
         # 從持倉移除
         self._open_trades = [t for t in self._open_trades if t.trade_id != trade.trade_id]
 
-        def get_last_result(self) -> Optional[dict]:
+    def get_last_result(self) -> Optional[dict]:
         """取得最近一次回測結果"""
         return self._result
 
@@ -412,6 +417,7 @@ def run_mode_comparison(
         }
     """
     results = {}
+
     for mode in config.TRADING_MODES:
         logger.info(f"── 回測模式: {mode} ─────────────────")
         results[mode] = run_backtest(mode=mode, initial_balance=initial_balance, limit=limit)
@@ -430,6 +436,7 @@ def run_mode_comparison(
                 "sharpe_ratio": s["sharpe_ratio"],
                 "total_fees": s["total_fees"],
                 "total_trades": s["total_trades"],
+                "mode_name": config.TRADING_MODES.get(mode, {}).get("name", mode),
             }
 
     # 找出最佳模式
@@ -443,5 +450,4 @@ def run_mode_comparison(
     results["best_mode"] = best_mode
 
     logger.info(f"🏆 最佳模式: {best_mode}" if best_mode else "⚠️ 無有效回測結果")
-
     return results
